@@ -1,0 +1,27 @@
+node_modules/
+dist/
+npm-debug.log
+
+.yarn/*
+.pnp.*
+yarn-error.log
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+.env
+.granite
+.swc
+.DS_Store
+
+# 앱인토스 빌드 산출물
+.ait
+*.ait
+.ait-runtime*
+
+# 비밀값은 커밋되지 않는 파일에만 둔다 (예시 파일은 커밋한다)
+src/config.local.ts
+proxy/.env
+proxy/.cache/
