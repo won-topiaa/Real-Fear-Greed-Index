@@ -577,6 +577,18 @@ export const REFRESH = { minIntervalMs: 10 * 60_000 } as const;            // us
 
 흐름: 마운트 → `cache.read()` 있으면 즉시 `success(fromCache)`로 그림 → 요청 → 성공 시 캐시 갱신 → 실패 시 `error+cached`. 스냅샷 하나에 두 지수가 있어 지수 토글은 요청 없이 즉시. 마지막 선택 지수는 `Storage`에 저장.
 
+### 6.4.1 M3 구현에서 확정한 것(문서와 달라진 점)
+
+| 항목 | 구현 | 이유 |
+|---|---|---|
+| 게이지·축 막대·사분면·스파크라인 | **View 기반**(`src/ui/*`), SVG 미사용 | react-native-svg 호스트 렌더가 미검증이라 폴백을 기본으로 삼음. SVG 는 M4 샌드박스 확인 후 선택 |
+| 포그라운드 복귀 갱신 | RN `AppState` 'active' 이벤트 | granite 루트 index 가 `useVisibility` 를 재수출하지 않음(설치본 확인) |
+| 화면 컴포넌트 위치 | `src/screens/HomeScreen.tsx`, `AboutScreen.tsx` — 라우팅(`src/pages/*`)과 분리 | 테스트가 granite `createRoute` 없이 화면을 직접 렌더 |
+| 의존성 주입 | `src/data/RfgContext.tsx`(컨텍스트, 프레임워크 import 없음) + `RfgProvider.tsx`(실제 배선, `_app.tsx` 전용) | 테스트·목이 메모리 플랫폼을 주입 |
+| 프레임워크 접근 | `src/data/platform.ts`(인터페이스·메모리 구현) + `platform.framework.ts`(`Storage`, `getNetworkStatus`, `getOperationalEnvironment` **정적 import**) | 네이티브 모듈이 테스트 경로에 들어오지 않게. 함수 안 `require()` 는 esbuild 가 프레임워크 CJS 를 중복 번들해 번들이 3배가 됐음(실측 4.85MB → 1.43MB) |
+| 목 픽스처 | `src/data/fixtures/*.json`(9종, `proxy build-fixtures` 생성물) + `generatedAtUtc` 만 현재 시각으로 교체 | 시나리오별 신선도(delayed/stale)를 기기 시각과 무관하게 재현 |
+| 상태 이름 | `mock / loading / ready / delayed / stale / fg-missing / error-with-cache / error / offline / outdated` | §6.3 표와 동일 |
+
 ### 6.5 원칙
 
 - **JSX에 사용자 노출 숫자 리터럴을 쓰지 않는다.** 문구는 `src/text/copy.ts`가 상수를 보간해 만든다. `check-pure-modules.mjs`가 `src/pages`·`src/ui`의 문자열 리터럴에서 `20|80|40|60|70|0.5|1.5`를 찾으면 실패(`StyleSheet.create` 블록과 `// numbers-ok` 표시 줄은 허용).
@@ -813,8 +825,8 @@ collect:
 | M | 산출물 | 완료 기준 | 상태 |
 |---|---|---|---|
 | M0 | 스캐폴드, doctor, check-config, 빌드 검증 | doctor 통과, `tsc`·jest·`ait build` 통과, 두 런타임 번들 해시 다름 | **완료** |
-| M1 | `src/core` 전부 + `src/text` + 단위 테스트 + 손계산 골든 | §9.2 core/text 테스트 통과, `minClosesRequired()==311` | |
-| M2 | `proxy/` 수집·검증·계산·게시 + 픽스처 e2e + 골든 스냅샷 + `inspect-*` 스크립트 + 로컬 `serve` | 픽스처로 e2e 통과, 계약 테스트 통과. **로컬에서 inspect 실행 후 [검증 필요] 해소** | |
-| M3 | `src/data`, `src/ui`, 홈·정보 화면, 목 모드, `check-routes`/`check-pure-modules` | 샌드박스에서 목 모드 홈·정보 렌더, 상태표 10행 테스트 통과, SVG 렌더 확인 | |
+| M1 | `src/core` 전부 + `src/text` + 단위 테스트 + 손계산 골든 | §9.2 core/text 테스트 통과, `minClosesRequired()==311` | **완료** (테스트 116) |
+| M2 | `proxy/` 수집·검증·계산·게시 + 픽스처 e2e + 골든 스냅샷 + `inspect` 스크립트 + 로컬 `serve` + Actions 워크플로 | 픽스처로 e2e 통과, 계약 테스트 통과. **로컬에서 inspect 실행 후 [검증 필요] 해소** | **코드 완료** (테스트 27). inspect 실행은 로컬 작업 |
+| M3 | `src/data`, `src/ui`, `src/screens`, 홈·정보 화면, 목 모드, `check-routes`/`check-pure-modules`/`predeploy`, doctor 확장 | 상태표 10행 뷰모델·화면 테스트 통과, `ait build` 통과. **샌드박스에서 목 모드 홈·정보 렌더 확인은 로컬 작업** | **코드 완료** (테스트 156) |
 | M4 | Actions cron + Cloudflare Pages + healthchecks + 샌드박스 실데이터 | 3일 연속 `ok`, 앱이 실데이터 `ready`(§3.7 실험 통과) | |
 | M5 | 백테스트 리포트 1회, 파라미터 확정, 스토어 그림·텍스트 생성, `predeploy`, 아이콘 URL, 배포 | doctor 신규 항목 통과, 키 있는 기계에서 `ait deploy`, 스토어 등록 | |

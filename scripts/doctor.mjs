@@ -1,14 +1,20 @@
 // 앱인토스 새 앱 체크리스트를 코드로 검사한다. 반나절짜리 흰 화면을 10초에 잡기 위한 스크립트.
-import { existsSync, readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const problems = [];
+const warnings = [];
 const ok = (msg) => console.log(`  ✓ ${msg}`);
 const bad = (msg) => {
   problems.push(msg);
   console.log(`  ✗ ${msg}`);
+};
+const warn = (msg) => {
+  warnings.push(msg);
+  console.log(`  ! ${msg}`);
 };
 
 const mustExist = [
@@ -47,14 +53,92 @@ pkg.scripts?.build === 'ait build' ? ok('scripts.build = ait build') : bad('scri
 console.log('granite.config.ts');
 const cfg = readFileSync(join(root, 'granite.config.ts'), 'utf8');
 /^\s*target\s*:/m.test(cfg) ? bad('target 이 적혀 있음 → 0.84 번들까지 0.72 변환을 받아 두 번들이 같아짐') : ok('target 없음');
-/icon:\s*['"]\.{0,2}\//.test(cfg) ? bad('brand.icon 이 파일 경로 — URL 이어야 함') : ok('brand.icon 이 경로 형태가 아님');
+const iconMatch = /icon:\s*['"]([^'"]*)['"]/.exec(cfg);
+const icon = iconMatch ? iconMatch[1] : '';
+if (/^\.{0,2}\//.test(icon)) bad('brand.icon 이 파일 경로 — 이미지 URL 이어야 함');
+else if (icon === '') warn('brand.icon 이 비어 있음 — 배포 전 https:// URL 로 채울 것 (predeploy 에서는 실패)');
+else if (!/^https:\/\//.test(icon)) bad('brand.icon 은 https:// URL 이어야 함');
+else ok('brand.icon URL');
 /scheme:\s*['"]intoss['"]/.test(cfg) ? ok('scheme = intoss') : bad('scheme 이 intoss 가 아님');
+/permissions:\s*\[\s*\]/.test(cfg) ? ok('permissions: [] (위치·연락처·사진 미사용 선언)') : warn('permissions 가 비어 있지 않음 — 심사 선언과 실제 사용이 일치하는지 확인');
+
+console.log('권한·광고 미사용 선언과 소스 일치');
+function walk(dir, out = []) {
+  if (!existsSync(dir)) return out;
+  for (const name of readdirSync(dir)) {
+    const p = join(dir, name);
+    if (statSync(p).isDirectory()) {
+      if (name === 'node_modules') continue;
+      walk(p, out);
+    } else if (/\.(ts|tsx)$/.test(name)) out.push(p);
+  }
+  return out;
+}
+const appSources = walk(join(root, 'src')).map((f) => readFileSync(f, 'utf8')).join('\n');
+const forbiddenSymbols = ['useGeolocation', 'getCurrentLocation', 'fetchContacts', 'getClipboardText', 'InlineAd', 'loadFullScreenAd', 'showFullScreenAd', 'Analytics'];
+const used = forbiddenSymbols.filter((s) => new RegExp(`\\b${s}\\b`).test(appSources));
+used.length === 0 ? ok('위치·연락처·클립보드·광고·분석 심볼 미사용') : bad(`선언과 다른 심볼 사용: ${used.join(', ')}`);
 
 console.log('비밀값');
 const gi = readFileSync(join(root, '.gitignore'), 'utf8');
 for (const f of ['src/config.local.ts', 'proxy/.env']) {
   gi.split('\n').some((l) => l.trim() === f) ? ok(`${f} gitignore됨`) : bad(`${f} 가 .gitignore 에 없음`);
 }
+const tracked = spawnSync('git', ['ls-files', 'src/config.local.ts', 'proxy/.env'], { cwd: root, encoding: 'utf8' });
+if (tracked.status === 0) {
+  tracked.stdout.trim() === '' ? ok('비밀 파일이 git 에 추적되지 않음') : bad(`비밀 파일이 git 에 추적됨: ${tracked.stdout.trim().replace(/\n/g, ', ')}`);
+}
 
-console.log(problems.length === 0 ? '\n모두 통과' : `\n문제 ${problems.length}건`);
+console.log('상수 정합성');
+try {
+  const constants = readFileSync(join(root, 'src/core/constants.ts'), 'utf8');
+  const num = (key) => Number(/\b${key}\b/.source && new RegExp(`${key}:\\s*([\\d.]+)`).exec(constants)?.[1]);
+  const N = num('DD_WINDOW_N'), M = num('SMA_WINDOW_M'), K = num('RV_WINDOW_K'), W = num('PERCENTILE_WINDOW_W');
+  const H = num('HISTORY_DAYS'), MIN = num('MIN_CLOSES'), MINS = num('MIN_CLOSES_FOR_SNAPSHOT');
+  const expectMin = Math.max(N, M, K + 1) + W - 1;
+  MIN === expectMin ? ok(`MIN_CLOSES ${MIN} = max(N,M,K+1)+W−1`) : bad(`MIN_CLOSES ${MIN} ≠ ${expectMin}`);
+  MINS === expectMin + H - 1 ? ok(`MIN_CLOSES_FOR_SNAPSHOT ${MINS}`) : bad(`MIN_CLOSES_FOR_SNAPSHOT ${MINS} ≠ ${expectMin + H - 1}`);
+} catch (e) {
+  bad(`constants.ts 를 읽지 못함: ${e.message}`);
+}
+
+console.log('휴장일 목록');
+try {
+  const cal = readFileSync(join(root, 'src/core/calendar.ts'), 'utf8');
+  const now = new Date();
+  const nextYear = now.getUTCFullYear() + (now.getUTCMonth() >= 10 ? 1 : 0);
+  const years = new Set([...cal.matchAll(/'(\d{4})-\d{2}-\d{2}'/g)].map((m) => Number(m[1])));
+  years.has(now.getUTCFullYear()) ? ok(`NYSE_HOLIDAYS ${now.getUTCFullYear()} 있음`) : bad(`NYSE_HOLIDAYS 에 ${now.getUTCFullYear()} 없음`);
+  if (nextYear !== now.getUTCFullYear()) years.has(nextYear) ? ok(`NYSE_HOLIDAYS ${nextYear} 있음`) : warn(`11월 이후: NYSE_HOLIDAYS 에 ${nextYear} 목록을 추가할 것`);
+} catch (e) {
+  bad(`calendar.ts 를 읽지 못함: ${e.message}`);
+}
+
+console.log('계약(골든 스냅샷)');
+const goldenPath = join(root, 'proxy/test/golden/snapshot.json');
+if (existsSync(goldenPath)) {
+  try {
+    const g = JSON.parse(readFileSync(goldenPath, 'utf8'));
+    const copy = readFileSync(join(root, 'src/text/copy.ts'), 'utf8');
+    const dv = Number(/version:\s*(\d+)/.exec(copy)?.[1]);
+    g.disclaimerVersion === dv ? ok(`disclaimerVersion ${dv} 일치`) : bad(`골든 disclaimerVersion ${g.disclaimerVersion} ≠ copy.ts ${dv} — proxy build-fixtures 재실행`);
+    g.schemaVersion === 1 ? ok('골든 schemaVersion 1') : bad('골든 schemaVersion 이 1 이 아님');
+  } catch (e) {
+    bad(`골든 스냅샷 파싱 실패: ${e.message}`);
+  }
+} else {
+  warn('proxy/test/golden/snapshot.json 없음 — cd proxy && npm run build-fixtures');
+}
+
+console.log('라우트 동기화');
+const routes = spawnSync(process.execPath, [join(root, 'scripts/check-routes.mjs')], { encoding: 'utf8' });
+process.stdout.write(routes.stdout);
+if (routes.status !== 0) problems.push('check-routes 실패');
+
+console.log('순수 모듈·문구 규칙');
+const pure = spawnSync(process.execPath, [join(root, 'scripts/check-pure-modules.mjs')], { encoding: 'utf8' });
+process.stdout.write(pure.stdout);
+if (pure.status !== 0) problems.push('check-pure-modules 실패');
+
+console.log(problems.length === 0 ? `\n모두 통과${warnings.length ? ` (경고 ${warnings.length}건)` : ''}` : `\n문제 ${problems.length}건`);
 process.exit(problems.length === 0 ? 0 : 1);

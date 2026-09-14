@@ -11,7 +11,10 @@
     "test": "jest --passWithNoTests",
     "typecheck": "tsc --noEmit",
     "check-config": "node scripts/check-config.mjs",
-    "doctor": "node scripts/doctor.mjs"
+    "doctor": "node scripts/doctor.mjs",
+    "predeploy": "node scripts/predeploy.mjs",
+    "check-routes": "node scripts/check-routes.mjs",
+    "check-pure": "node scripts/check-pure-modules.mjs"
   },
   "dependencies": {
     "@apps-in-toss/framework": "2.10.10",

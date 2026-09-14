@@ -1,20 +1,12 @@
 import { createRoute } from '@granite-js/react-native';
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { HomeScreen } from '../screens/HomeScreen';
 
 export const Route = createRoute('/', {
   component: HomePage,
 });
 
 function HomePage() {
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>실질 공포탐욕지수</Text>
-    </View>
-  );
+  const navigation = Route.useNavigation();
+  return <HomeScreen onOpenAbout={() => navigation.navigate('/about')} />;
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' },
-  title: { fontSize: 20, fontWeight: 'bold', color: '#191F28' },
-});

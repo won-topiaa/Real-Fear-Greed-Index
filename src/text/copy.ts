@@ -1,6 +1,6 @@
 /**
  * 사용자에게 보이는 모든 문구. 숫자는 core 상수를 보간해서만 만든다(JSX 에 숫자 리터럴 금지).
- * 행동 지시 문구(매매·헤지·권유)는 쓰지 않는다 — 국면 서술만. doctor 가 금지 단어를 검사한다.
+ * 행동을 지시하는 문구(사고팔라는 권유 등)는 쓰지 않는다 — 국면 서술만. doctor 가 금지 단어를 검사한다.
  * 순수 TS: react/react-native import 금지(스토어 그림 스크립트가 그대로 import).
  */
 import { DATA_GATES, RFG_PARAMS as P, THRESHOLDS as T } from '../core/constants';
