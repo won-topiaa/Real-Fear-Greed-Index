@@ -25,3 +25,6 @@ yarn-error.log
 src/config.local.ts
 proxy/.env
 proxy/.cache/
+
+# 파이프라인 산출물(게시는 Cloudflare Pages 로)
+proxy/public/

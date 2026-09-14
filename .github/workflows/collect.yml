@@ -1,0 +1,63 @@
+name: collect
+
+# 22:30 UTC = 07:30 KST (미국 마감 20:00/21:00 UTC 이후, 서머타임 무관). 01:00 UTC 는 FRED 반영 지연 대비 재시도.
+# 주말·휴장일에도 돌며 unchanged 로 정상 종료한다.
+# 주의: GitHub 는 공개 레포가 60일간 비활성이면 스케줄 워크플로를 끈다 → healthchecks 데드맨 핑으로 감지.
+on:
+  schedule:
+    - cron: '30 22 * * *'
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: proxy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: proxy/package-lock.json
+      - run: npm ci
+      # 관측 누적(fg/history.json)과 소스 캐시를 실행 간에 유지한다.
+      - uses: actions/cache@v4
+        with:
+          path: proxy/.cache
+          key: rfg-cache-${{ github.run_id }}
+          restore-keys: |
+            rfg-cache-
+      - name: Download previous publish (for partial fallback)
+        continue-on-error: true
+        run: |
+          mkdir -p public/v1
+          curl -fsSL "https://${PAGES_HOST}/v1/snapshot.json" -o public/v1/snapshot.json || true
+        env:
+          PAGES_HOST: ${{ vars.PAGES_HOST }}
+      - name: Collect
+        run: npx tsx src/cli.ts collect --out ./public --data ./.cache
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          HEALTHCHECKS_PING_URL: ${{ secrets.HEALTHCHECKS_PING_URL }}
+          CNN_USER_AGENT: ${{ vars.CNN_USER_AGENT }}
+      - name: Deploy to Cloudflare Pages
+        if: ${{ vars.PAGES_PROJECT != '' }}
+        run: npx wrangler pages deploy ./public --project-name "${PAGES_PROJECT}" --commit-dirty=true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PAGES_PROJECT: ${{ vars.PAGES_PROJECT }}
+      - name: Upload status artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: status-${{ github.run_id }}
+          path: proxy/public/v1/status.json
+          if-no-files-found: ignore

@@ -1,0 +1,24 @@
+{
+  "name": "rfg-pipeline",
+  "private": true,
+  "version": "0.1.0",
+  "description": "RFG 수집·검증·계산·게시 잡. 런타임 의존성 없음(Node 22 내장 fetch/fs).",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test \"test/**/*.test.ts\"",
+    "collect": "tsx src/cli.ts collect --out ./public --data ./.cache",
+    "serve": "tsx src/cli.ts serve --dir ./public",
+    "build-fixtures": "tsx scripts/build-fixtures.ts",
+    "backtest": "tsx scripts/backtest.ts",
+    "inspect": "node scripts/inspect.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.8.3"
+  }
+}
