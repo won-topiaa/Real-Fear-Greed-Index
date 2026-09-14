@@ -394,7 +394,7 @@ export function addCalendarDays(d: IsoDate, days: number): IsoDate;
 
 // ── freshness.ts ──────────────────────────────────────────────────────────
 export type Freshness = 'fresh' | 'delayed' | 'stale' | 'unknown';
-export function assessFreshness(snapshot: RfgSnapshot, nowUtcMs: number, gates?: typeof DATA_GATES): { level: Freshness; tradingDaysBehind: number; expected: IsoDate };
+export function assessFreshness(snapshot: RfgSnapshot, symbol: IndexSymbol, nowUtcMs: number, gates?: typeof DATA_GATES): { level: Freshness; tradingDaysBehind: number; expected: IsoDate }; // 지수별 closeDate 로 판정
 
 // ── snapshot.ts ───────────────────────────────────────────────────────────
 export interface MarketBlock {
@@ -414,7 +414,15 @@ export interface RfgSnapshot {
   fgSource: 'cnn' | 'own-history';
   markets: Record<IndexSymbol, MarketBlock>;
 }
-export function buildSnapshot(input: { rows: Record<IndexSymbol, readonly RfgRow[]>; meta: Omit<RfgSnapshot, 'schemaVersion' | 'markets' | 'params'> & { priceSource: Record<IndexSymbol, MarketBlock['priceSource']>; flags: Record<IndexSymbol, MarketBlock['flags']> }; params?: RfgParams; historyDays?: number }): RfgSnapshot;
+export interface BuildSnapshotInput {
+  rows: Record<IndexSymbol, readonly RfgRow[]>;
+  priceSource: Record<IndexSymbol, MarketBlock['priceSource']>;
+  flags: Record<IndexSymbol, MarketBlock['flags']>;
+  generatedAtUtc: string; expectedLatestTradingDate: IsoDate; holidays: readonly IsoDate[];
+  fgSource: RfgSnapshot['fgSource']; disclaimerVersion: number;
+  params?: RfgParams; historyDays?: number;
+}
+export function buildSnapshot(input: BuildSnapshotInput): RfgSnapshot;                     // closeAtUtc 는 closeAtUtcOf(closeDate)
 export type SchemaError = { path: string; code: 'missing' | 'type' | 'range' | 'version' };
 export function parseSnapshot(input: unknown): { ok: true; value: RfgSnapshot } | { ok: false; error: SchemaError }; // 의존성 없는 런타임 검증
 
@@ -425,9 +433,9 @@ export interface BacktestReport {
   strategies: Record<'rfg-buy' | 'cnn-only-fear65' | 'q4-bear-trap' | 'q1-capitulation' | 'risk', {
     count: number; meanReturn: number[]; medianReturn: number[]; winRate: number[]; maxUnderwater: number; signalsPerYear: number;
   }>;
-  fgCoverage: { from: IsoDate; to: IsoDate; sources: string[] };
+  fgCoverage: { from: IsoDate | null; to: IsoDate | null; rowsWithFg: number };          // FG 소스 구간은 파이프라인 status 가 보고
 }
-export function evaluateSignals(rows: readonly RfgRow[], opts?: { horizons?: number[]; thresholds?: typeof THRESHOLDS }): BacktestReport;
+export function evaluateSignals(rows: readonly RfgRow[], opts?: { horizons?: number[]; thresholds?: typeof THRESHOLDS; tradingDaysPerYear?: number }): BacktestReport;
 ```
 
 `src/text`(순수 TS, RN 의존 없음 — 스토어 그림 스크립트가 그대로 import):
