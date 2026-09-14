@@ -30,6 +30,17 @@ for (const d of PURE_DIRS) {
   }
 }
 
+// src/text 는 core·자기 자신·순수 상태 타입(src/data/state)만 import 한다. 타입 import 도 tsc 프로그램에 react-native 를 끌어들여
+// 파이프라인 typecheck 를 깨뜨리므로 금지한다.
+const TEXT_ALLOWED = /^(\.\/|\.\.\/core\/|\.\.\/data\/state$)/;
+for (const f of walk(join(root, 'src/text'))) {
+  const src = readFileSync(f, 'utf8');
+  for (const m of src.matchAll(/^\s*import\s[^;]*from\s+['"]([^'"]+)['"]/gm)) {
+    const spec = m[1];
+    if (spec.startsWith('.') && !TEXT_ALLOWED.test(spec)) problems.push(`${relative(root, f)}: src/text 는 ${spec} 를 import 할 수 없음 (core · ./ · ../data/state 만)`);
+  }
+}
+
 const UI_DIRS = ['src/pages', 'src/screens', 'src/ui'];
 const THRESHOLD_NUMBERS = /(^|[^\d.])(20|80|40|60|70|0\.5|1\.5)(?![\d.%])/;
 const FORBIDDEN_WORDS = ['매수', '매도', '헤지', '수익 실현', '추천', '청산'];

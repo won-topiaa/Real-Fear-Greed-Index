@@ -90,7 +90,7 @@ export function HomeScreen({ onOpenAbout }: { onOpenAbout?: () => void }) {
             <AxisBars fearLabel={LABELS.axis.fear} fear={vm.fear} fearValue={vm.fearValue} pLabel={LABELS.axis.p} p={vm.p} pValue={vm.pValue} frmLabel={LABELS.axis.frm} frm={vm.frm} />
           </Section>
           <Section>
-            <QuadrantCard quadrant={vm.quadrant} label={vm.quadrantLabel} description={vm.quadrantDescription} axisX={LABELS.axis.fear} axisY={LABELS.axis.p} a11y={vm.a11ySummary} />
+            <QuadrantCard quadrant={vm.quadrant} cellLabels={LABELS.quadrant} label={vm.quadrantLabel} description={vm.quadrantDescription} axisX={LABELS.axis.fear} axisY={LABELS.axis.p} a11y={vm.a11ySummary} />
           </Section>
           <Section>
             {vm.frmSentence ? (

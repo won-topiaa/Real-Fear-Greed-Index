@@ -133,7 +133,7 @@ npm run deploy
 ```
 
 - `npm run build` 는 `ait build`(= `.ait` 산출물). `granite build` 가 아니다.
-- `npm run deploy` 전에 `predeploy` 가 자동으로 돈다: 목 모드·원격 세션(`CI`, `CLAUDE_CODE`, `CODESPACES`, `SSH_CONNECTION`)·아이콘 미기입이면 실패한다.
+- `npm run deploy` 전에 `predeploy` 가 자동으로 돈다: 목 모드·원격 세션(`CI`, `CODESPACES`, `SSH_CONNECTION`, `GITHUB_ACTIONS`, `CLAUDECODE`, `CLAUDE_CODE_*`)·아이콘 미기입이면 실패한다.
 - 키 교체 시 `npx ait token remove` 먼저. 프로필에 옛 키가 남아 있으면 `--api-key` 가 조용히 무시된다.
 - 배포 후 실제 토스 앱(Android ≥ 5.220.0 / iOS ≥ 5.221.0)에서 최종 확인. 그 미만 버전은 앱이 아예 그려지지 않는다.
 

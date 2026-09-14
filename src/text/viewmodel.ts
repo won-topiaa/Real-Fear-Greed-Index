@@ -5,7 +5,7 @@
 import { classify } from '../core/classify';
 import { assessFreshness, type Freshness } from '../core/freshness';
 import type { Classification, IndexSymbol, RfgSnapshot } from '../core/types';
-import type { DataState } from '../data/useRfgSnapshot';
+import type { DataState } from '../data/state';
 import { APP_TITLE, COPY, DISCLAIMER, FRM_MEANING, LABELS, QUADRANT_DESCRIPTION, a11ySummary } from './copy';
 import { EMPTY, formatBasisLine, formatFrm, formatPercent, formatScore } from './format';
 
@@ -109,6 +109,7 @@ function withSnapshot(vm: HomeViewModel, snapshot: RfgSnapshot, args: SelectHome
 
   if (fresh.level === 'stale') {
     out.mode = 'stale';
+    out.sparkline = []; // RFG 는 차단 — 추이도 보여주지 않는다
     out.badge = { text: COPY.freshness('stale', fresh.tradingDaysBehind), tone: 'red' };
     out.emptyMessage = COPY.staleBlocked;
     out.a11ySummary = `${APP_TITLE} ${COPY.staleBlocked}`;

@@ -1,7 +1,7 @@
 /**
  * 수집 → 검증 → 계산 → 게시 (DESIGN §7.2).
  * 실패 모드: 지수 하나가 실패하면 그 지수는 이전 스냅샷 블록을 유지(partial). 둘 다 없으면 게시하지 않는다(failed).
- * status.json 은 결과와 무관하게 항상 쓴다.
+ * status.json 은 결과와 무관하게 — 예기치 못한 예외가 나도 — 항상 쓴다.
  */
 import { NYSE_HOLIDAYS, expectedLatestTradingDate, nyDateOf } from '../../src/core/calendar';
 import { DATA_GATES, RFG_PARAMS, minClosesForSnapshot } from '../../src/core/constants';
@@ -10,11 +10,11 @@ import { buildSnapshot } from '../../src/core/snapshot';
 import type { IndexSymbol, MarketBlock, MarketFlag, RfgRow, RfgSnapshot, ValidationIssue } from '../../src/core/types';
 import { DISCLAIMER } from '../../src/text/copy';
 import { silentLogger } from './log';
-import { publishSnapshot, readPublishedSnapshot, writeStatus, type StatusJson } from './publish';
+import { publishSnapshot, readPublishedSnapshot, writeHeadersFile, writeStatus, type StatusJson } from './publish';
 import { collectFg } from './sources/fg';
 import { PRICE_ADAPTERS, selectPriceSeries } from './sources/price';
 import { FileStore } from './store/FileStore';
-import type { Ctx, Env, Logger, PriceAdapter, SourceReport } from './types';
+import type { Ctx, Env, Logger, PriceAdapter } from './types';
 
 export const SYMBOLS: readonly IndexSymbol[] = ['SPX', 'NDX'];
 const RAW_KEEP_DAYS = 30;
@@ -50,6 +50,19 @@ async function ping(ctx: Ctx, ok: boolean): Promise<void> {
   }
 }
 
+function emptyStatus(runAtUtc: string, runId: string, expected: string): StatusJson {
+  return {
+    runAtUtc,
+    runId,
+    result: 'failed',
+    expectedLatestTradingDate: expected,
+    sources: [],
+    published: { generatedAtUtc: null, unchanged: false, markets: { SPX: 'none', NDX: 'none' } },
+    checks: { crossCheck: { SPX: [], NDX: [] }, closesAvailable: { SPX: 0, NDX: 0 }, fgHistoryPoints: 0 },
+    errors: [],
+  };
+}
+
 export async function collect(opts: CollectOptions): Promise<CollectResult> {
   const nowUtcMs = opts.nowUtcMs ?? Date.now();
   const ctx: Ctx = {
@@ -62,13 +75,38 @@ export async function collect(opts: CollectOptions): Promise<CollectResult> {
   };
   const runAtUtc = new Date(nowUtcMs).toISOString();
   const runId = opts.runId ?? `local-${runAtUtc}`;
-  const store = new FileStore(opts.dataDir);
   const expected = expectedLatestTradingDate(nowUtcMs, NYSE_HOLIDAYS);
-  const errors: string[] = [];
-  const sources: SourceReport[] = [];
-  const crossCheck = { SPX: [] as ValidationIssue[], NDX: [] as ValidationIssue[] };
-  const closesAvailable = { SPX: 0, NDX: 0 };
-  const marketsOrigin: Record<IndexSymbol, 'new' | 'previous' | 'none'> = { SPX: 'none', NDX: 'none' };
+  const status = emptyStatus(runAtUtc, runId, expected);
+  let snapshot: RfgSnapshot | null = null;
+
+  try {
+    const r = await collectInner(ctx, opts, runAtUtc, runId, expected, status);
+    snapshot = r;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    ctx.log.error(`unexpected failure: ${msg}`);
+    status.result = 'failed';
+    status.errors.push(`unexpected: ${msg.slice(0, 200)}`);
+    snapshot = null;
+  }
+
+  try {
+    await writeHeadersFile(opts.outDir);
+    await writeStatus(opts.outDir, status);
+  } catch (e) {
+    ctx.log.error(`status write failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  if (opts.ping !== false) await ping(ctx, status.result !== 'failed');
+  return { result: status.result, status, snapshot };
+}
+
+async function collectInner(ctx: Ctx, opts: CollectOptions, runAtUtc: string, runId: string, expected: string, status: StatusJson): Promise<RfgSnapshot | null> {
+  const store = new FileStore(opts.dataDir);
+  const errors = status.errors;
+  const sources = status.sources;
+  const crossCheck = status.checks.crossCheck;
+  const closesAvailable = status.checks.closesAvailable;
+  const marketsOrigin = status.published.markets;
 
   ctx.log.info(`run ${runId} expected=${expected}`);
   const previous = await readPublishedSnapshot(opts.outDir);
@@ -76,6 +114,7 @@ export async function collect(opts: CollectOptions): Promise<CollectResult> {
   // 1. FG
   const fg = await collectFg(ctx, store, expected);
   sources.push(fg.report);
+  status.checks.fgHistoryPoints = fg.history.length;
   if (fg.raw) await store.saveRaw(expected, 'cnn.json', fg.raw);
 
   // 2. 지수별 종가 → 계산
@@ -87,7 +126,7 @@ export async function collect(opts: CollectOptions): Promise<CollectResult> {
   for (const sym of SYMBOLS) {
     const sel = await selectPriceSeries(ctx, sym, expected, { adapters: opts.adapters ?? PRICE_ADAPTERS });
     sources.push(...sel.reports);
-    crossCheck[sym] = sel.crossCheck;
+    crossCheck[sym] = sel.crossCheck as ValidationIssue[];
     for (const [src, text] of Object.entries(sel.raw)) await store.saveRaw(expected, `${sym}.${src}.txt`, text);
     if (!sel.chosen) {
       errors.push(`${sym}: no price source reached ${expected}`);
@@ -132,50 +171,40 @@ export async function collect(opts: CollectOptions): Promise<CollectResult> {
       disclaimerVersion: DISCLAIMER.version,
     });
     const markets = { ...built.markets };
+    let complete = true;
     for (const sym of SYMBOLS) {
       if (rows[sym]) continue;
       if (previous?.markets[sym]) {
         markets[sym] = previous.markets[sym];
         marketsOrigin[sym] = 'previous';
       } else {
-        markets[sym] = undefined as unknown as MarketBlock;
+        complete = false;
       }
     }
-    if (SYMBOLS.every((s) => markets[s] != null)) snapshot = { ...built, markets };
+    if (complete) snapshot = { ...built, markets };
   }
 
-  let result: StatusJson['result'];
-  if (snapshot && SYMBOLS.every((s) => marketsOrigin[s] === 'new')) result = 'ok';
-  else if (snapshot) result = 'partial';
-  else result = 'failed';
+  if (snapshot && SYMBOLS.every((s) => marketsOrigin[s] === 'new')) status.result = 'ok';
+  else if (snapshot) status.result = 'partial';
+  else status.result = 'failed';
 
   const unchanged = snapshot != null && previous != null && SYMBOLS.every((s) => previous.markets[s].closeDate === snapshot!.markets[s].closeDate);
+  status.published.unchanged = unchanged;
 
   if (snapshot) {
     try {
       await publishSnapshot(opts.outDir, snapshot);
-      ctx.log.info(`published snapshot for ${expected} (${result}${unchanged ? ', unchanged' : ''})`);
+      ctx.log.info(`published snapshot for ${expected} (${status.result}${unchanged ? ', unchanged' : ''})`);
     } catch (e) {
       errors.push(e instanceof Error ? e.message : 'publish failed');
       snapshot = null;
-      result = 'failed';
+      status.result = 'failed';
     }
   } else {
     ctx.log.error(`no snapshot published: ${errors.join('; ')}`);
   }
+  status.published.generatedAtUtc = snapshot?.generatedAtUtc ?? previous?.generatedAtUtc ?? null;
 
-  const status: StatusJson = {
-    runAtUtc,
-    runId,
-    result,
-    expectedLatestTradingDate: expected,
-    sources,
-    published: { generatedAtUtc: snapshot?.generatedAtUtc ?? previous?.generatedAtUtc ?? null, unchanged, markets: marketsOrigin },
-    checks: { crossCheck, closesAvailable, fgHistoryPoints: fg.history.length },
-    errors,
-  };
-  await writeStatus(opts.outDir, status);
-  await store.pruneRaw(nyDateOf(nowUtcMs), RAW_KEEP_DAYS);
-  if (opts.ping !== false) await ping(ctx, result !== 'failed');
-  return { result, status, snapshot };
+  await store.pruneRaw(nyDateOf(ctx.nowUtcMs), RAW_KEEP_DAYS);
+  return snapshot;
 }

@@ -1,15 +1,20 @@
 /**
  * 보고서 §2.2 의 롤링 지표. 입력 배열은 오래된 → 최신, closes[t] 가 거래일 t 의 종가.
  * 창이 모자라는 앞부분은 null. 부분 창으로 값을 만들지 않는다.
+ * 비유한수(NaN/±Infinity)와 0 이하 종가는 null 과 같이 취급한다 — 조용히 이상한 숫자를 만들지 않는다.
  */
 
-/** r_t = ln(Close_t / Close_{t-1}). r[0] 은 null. */
+function finite(x: number | null | undefined): x is number {
+  return x != null && Number.isFinite(x);
+}
+
+/** r_t = ln(Close_t / Close_{t-1}). r[0] 은 null. 0 이하·비유한 종가가 끼면 null. */
 export function computeLogReturns(closes: readonly number[]): (number | null)[] {
   const out: (number | null)[] = new Array(closes.length).fill(null);
   for (let i = 1; i < closes.length; i++) {
     const prev = closes[i - 1];
     const cur = closes[i];
-    if (prev == null || cur == null) continue;
+    if (!finite(prev) || !finite(cur) || prev <= 0 || cur <= 0) continue;
     out[i] = Math.log(cur / prev);
   }
   return out;
@@ -17,40 +22,53 @@ export function computeLogReturns(closes: readonly number[]): (number | null)[] 
 
 /**
  * DD_t = (Close_t − max_{i∈[0,N−1]} Close_{t−i}) / max_{i∈[0,N−1]} Close_{t−i}
- * 창은 현재를 포함한 N 개. 고점이 현재면 0. t < N−1 이면 null.
+ * 창은 현재를 포함한 N 개. 고점이 현재면 0. t < N−1 이면 null. 창 안에 비유한수가 있으면 null.
  */
 export function rollingDrawdown(closes: readonly number[], n: number): (number | null)[] {
   const out: (number | null)[] = new Array(closes.length).fill(null);
   for (let t = n - 1; t < closes.length; t++) {
     let max = -Infinity;
+    let ok = true;
     for (let i = t - n + 1; i <= t; i++) {
       const c = closes[i];
-      if (c != null && c > max) max = c;
+      if (!finite(c)) {
+        ok = false;
+        break;
+      }
+      if (c > max) max = c;
     }
     const cur = closes[t];
-    if (cur == null || !(max > 0)) continue;
+    if (!ok || !finite(cur) || !(max > 0)) continue;
     out[t] = (cur - max) / max;
   }
   return out;
 }
 
-/** SMA_{M,t} = (1/M) Σ_{k=0}^{M−1} Close_{t−k} */
+/** SMA_{M,t} = (1/M) Σ_{k=0}^{M−1} Close_{t−k}. 창 안에 비유한수가 있으면 null. */
 export function rollingSma(closes: readonly number[], m: number): (number | null)[] {
   const out: (number | null)[] = new Array(closes.length).fill(null);
   for (let t = m - 1; t < closes.length; t++) {
     let sum = 0;
-    for (let i = t - m + 1; i <= t; i++) sum += closes[i] ?? 0;
-    out[t] = sum / m;
+    let ok = true;
+    for (let i = t - m + 1; i <= t; i++) {
+      const c = closes[i];
+      if (!finite(c)) {
+        ok = false;
+        break;
+      }
+      sum += c;
+    }
+    if (ok) out[t] = sum / m;
   }
   return out;
 }
 
-/** DISP_t = (Close_t − SMA_{M,t}) / SMA_{M,t} */
+/** DISP_t = (Close_t − SMA_{M,t}) / SMA_{M,t}. SMA 가 0 이하면 null. */
 export function rollingDisparity(closes: readonly number[], m: number): (number | null)[] {
   const sma = rollingSma(closes, m);
   return sma.map((s, t) => {
     const c = closes[t];
-    if (s == null || c == null || s === 0) return null;
+    if (!finite(s) || !finite(c) || s <= 0) return null;
     return (c - s) / s;
   });
 }
@@ -62,13 +80,14 @@ export function rollingDisparity(closes: readonly number[], m: number): (number 
 export function rollingRealizedVol(closes: readonly number[], k: number, annualizationDays: number): (number | null)[] {
   const r = computeLogReturns(closes);
   const out: (number | null)[] = new Array(closes.length).fill(null);
+  if (k < 2) return out;
   const scale = Math.sqrt(annualizationDays);
   for (let t = k; t < closes.length; t++) {
     let sum = 0;
     let ok = true;
     for (let j = t - k + 1; j <= t; j++) {
       const v = r[j];
-      if (v == null) {
+      if (!finite(v)) {
         ok = false;
         break;
       }
@@ -88,7 +107,7 @@ export function rollingRealizedVol(closes: readonly number[], k: number, annuali
 
 /**
  * P_t = PercentileRank_W(v_t) × 100  (DESIGN §4.1 확정 정의)
- * 창 = values[t−W+1 .. t], 자기 자신 포함, 길이 정확히 W. 창 안에 null 이 있으면 null.
+ * 창 = values[t−W+1 .. t], 자기 자신 포함, 길이 정확히 W. 창 안에 null(또는 비유한수)이 있으면 null.
  * P = (#{x < v} + 0.5·(#{x = v} − 1)) / (W − 1) × 100
  * 성질: 창 최대 → 100, 창 최소 → 0, 전부 동률 → 50.
  */
@@ -97,13 +116,13 @@ export function rollingPercentileRank(values: readonly (number | null)[], w: num
   if (w < 2) return out;
   for (let t = w - 1; t < values.length; t++) {
     const v = values[t];
-    if (v == null) continue;
+    if (!finite(v)) continue;
     let less = 0;
     let eq = 0;
     let ok = true;
     for (let i = t - w + 1; i <= t; i++) {
       const x = values[i];
-      if (x == null) {
+      if (!finite(x)) {
         ok = false;
         break;
       }

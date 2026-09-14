@@ -25,7 +25,10 @@ const cfg = readFileSync(join(root, 'granite.config.ts'), 'utf8');
 const icon = /icon:\s*['"]([^'"]*)['"]/.exec(cfg)?.[1] ?? '';
 if (!/^https:\/\//.test(icon)) fail('granite.config.ts 의 brand.icon 이 https:// URL 이 아님');
 
-const remoteMarkers = ['CI', 'CLAUDE_CODE', 'CODESPACES', 'SSH_CONNECTION', 'GITHUB_ACTIONS'].filter((k) => process.env[k]);
+// 원격/자동화 세션 지표. Claude Code 는 CLAUDECODE / CLAUDE_CODE_* 를 쓴다(실측).
+const remoteMarkers = Object.keys(process.env).filter(
+  (k) => ['CI', 'CODESPACES', 'SSH_CONNECTION', 'GITHUB_ACTIONS', 'CLAUDECODE'].includes(k) || k.startsWith('CLAUDE_CODE'),
+);
 if (remoteMarkers.length && !process.env.ALLOW_REMOTE_DEPLOY) {
   fail(`원격 환경 지표(${remoteMarkers.join(', ')}) — 배포는 키 있는 로컬 기계에서. 정말 원하면 ALLOW_REMOTE_DEPLOY=1`);
 }

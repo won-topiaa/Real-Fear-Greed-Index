@@ -1,6 +1,6 @@
 import { THRESHOLDS } from '../../core/constants';
 import { loadMockSnapshot } from '../../data/mockClient';
-import type { DataState } from '../../data/useRfgSnapshot';
+import type { DataState } from '../../data/state';
 import { COPY, LABELS } from '../copy';
 import { EMPTY } from '../format';
 import { selectHomeViewModel, type SelectHomeArgs } from '../viewmodel';
@@ -55,6 +55,7 @@ describe('selectHomeViewModel — 홈 상태표 (DESIGN §6.3)', () => {
     expect(vm.frmSentence).toBeNull();
     expect(vm.emptyMessage).toBe(COPY.staleBlocked);
     expect(vm.detailLine).not.toBeNull(); // DD/DISP/RV 는 보여준다
+    expect(vm.sparkline).toEqual([]); // RFG 추이는 차단
   });
 
   test('fg-missing: P 축만, 문장 없음', () => {

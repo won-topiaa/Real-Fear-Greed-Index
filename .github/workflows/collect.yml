@@ -27,8 +27,9 @@ jobs:
           cache: npm
           cache-dependency-path: proxy/package-lock.json
       - run: npm ci
-      # 관측 누적(fg/history.json)과 소스 캐시를 실행 간에 유지한다.
-      - uses: actions/cache@v4
+      # 관측 누적(fg/history.json)과 소스 캐시를 실행 간에 유지한다. 실패한 실행의 관측값도 남겨야 하므로 restore/save 를 분리해 항상 저장한다.
+      - uses: actions/cache/restore@v4
+        id: restore-cache
         with:
           path: proxy/.cache
           key: rfg-cache-${{ github.run_id }}
@@ -42,13 +43,20 @@ jobs:
         env:
           PAGES_HOST: ${{ vars.PAGES_HOST }}
       - name: Collect
+        id: collect
         run: npx tsx src/cli.ts collect --out ./public --data ./.cache
         env:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
           HEALTHCHECKS_PING_URL: ${{ secrets.HEALTHCHECKS_PING_URL }}
           CNN_USER_AGENT: ${{ vars.CNN_USER_AGENT }}
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: proxy/.cache
+          key: rfg-cache-${{ github.run_id }}
+      # 실패한 실행도 status.json 은 게시한다(snapshot.json 은 검증 통과 시에만 바뀌므로 안전).
       - name: Deploy to Cloudflare Pages
-        if: ${{ vars.PAGES_PROJECT != '' }}
+        if: ${{ always() && vars.PAGES_PROJECT != '' }}
         run: npx wrangler pages deploy ./public --project-name "${PAGES_PROJECT}" --commit-dirty=true
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

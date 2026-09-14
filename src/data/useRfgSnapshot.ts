@@ -2,20 +2,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import type { RfgSnapshot } from '../core/types';
 import { readCachedSnapshot, writeCachedSnapshot } from './cache';
-import { ClientError, type ClientErrorCode } from './client';
+import { ClientError } from './client';
 import { REFRESH } from './policy';
 import { useRfgDeps } from './RfgContext';
+import type { DataErrorCode, DataState } from './state';
 
-export type DataErrorCode = ClientErrorCode | 'offline' | 'unknown';
-
-export type DataState =
-  | { status: 'loading'; cached?: RfgSnapshot }
-  | { status: 'success'; data: RfgSnapshot; fromCache: boolean }
-  | { status: 'error'; error: { code: DataErrorCode; message: string }; cached?: RfgSnapshot };
+export type { DataErrorCode, DataState } from './state';
 
 export interface UseRfgSnapshotResult {
   state: DataState;
   refresh: () => void;
+  /** 사용자가 당겨서 새로고침했거나 백그라운드 갱신 중(첫 로딩은 제외) */
   isRefreshing: boolean;
 }
 
@@ -36,12 +33,13 @@ export function useRfgSnapshot(): UseRfgSnapshotResult {
   const lastSuccessRef = useRef(0);
   const inFlight = useRef<AbortController | null>(null);
   const mounted = useRef(true);
+  const hadContentRef = useRef(false);
 
   const load = useCallback(async () => {
     inFlight.current?.abort();
     const ac = new AbortController();
     inFlight.current = ac;
-    setRefreshing(true);
+    if (hadContentRef.current) setRefreshing(true);
     try {
       const net = await platform.getNetworkStatus();
       if (net === 'OFFLINE') {
@@ -51,6 +49,7 @@ export function useRfgSnapshot(): UseRfgSnapshotResult {
       const data = await client.getSnapshot({ signal: ac.signal });
       if (ac.signal.aborted || !mounted.current) return;
       cachedRef.current = data;
+      hadContentRef.current = true;
       lastSuccessRef.current = platform.now();
       setState({ status: 'success', data, fromCache: false });
       await writeCachedSnapshot(platform.storage, data);
@@ -69,6 +68,7 @@ export function useRfgSnapshot(): UseRfgSnapshotResult {
       if (!mounted.current) return;
       if (cached) {
         cachedRef.current = cached;
+        hadContentRef.current = true;
         setState({ status: 'success', data: cached, fromCache: true });
       }
       await load();

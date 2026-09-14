@@ -3,14 +3,16 @@ import type { RfgRow, RoundedValues } from './types';
 
 /**
  * 반올림 한 곳. 표시와 판정이 모두 이 함수를 거친다(DESIGN §4.3).
- * - JS Math.round 규칙(.5 는 +∞ 쪽). 판정에 쓰는 값은 모두 0 이상이라 "반올림 후 올림" 과 같다.
+ * - .5 는 0 에서 먼 쪽으로(half away from zero): 69.5 → 70, −2.65 → −2.7. 부호에 대칭이라 DD/DISP 같은 음수 표시도 일관된다.
+ *   판정에 쓰는 값(FG, Fear, P, RFG, FRM)은 모두 0 이상이므로 JS Math.round 와 결과가 같다.
  * - 1.005 같은 이진 표현 오차는 (1 + ε) 보정으로 흡수한다.
  * - −0 은 0 으로 정규화한다.
  */
 export function roundTo(v: number, digits: number): number {
   if (!Number.isFinite(v)) return v;
   const f = 10 ** digits;
-  const r = Math.round(v * f * (1 + Number.EPSILON)) / f;
+  const sign = v < 0 ? -1 : 1;
+  const r = (sign * Math.round(Math.abs(v) * f * (1 + Number.EPSILON))) / f;
   return Object.is(r, -0) ? 0 : r;
 }
 

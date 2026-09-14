@@ -27,11 +27,22 @@ describe('series — 보고서 §2.2 롤링 지표 (손계산 픽스처)', () =>
     expectSeries(rollingRealizedVol(CLOSES, TINY_PARAMS.RV_WINDOW_K, TINY_PARAMS.ANNUALIZATION_DAYS), EXPECTED.rv);
   });
 
-  test('RV 검산 i=3: 수익률 창 평균 0.016264, 표본분산 6.0215e−4', () => {
-    const r = [0.019803, -0.009852, 0.03884];
+  test('RV 검산 i=3: 손으로 유도한 값과 구현이 일치 (수익률 창 평균 0.016264, 표본분산 6.0215e−4)', () => {
+    const r = [Math.log(102 / 100), Math.log(101 / 102), Math.log(105 / 101)];
     const mean = r.reduce((a, b) => a + b, 0) / 3;
     const v = r.reduce((a, b) => a + (b - mean) ** 2, 0) / 2;
-    expect(Math.sqrt(252) * Math.sqrt(v)).toBeCloseTo(0.389533, 4);
+    const handDerived = Math.sqrt(252) * Math.sqrt(v);
+    expect(handDerived).toBeCloseTo(0.389533, 5);
+    expect(rollingRealizedVol(CLOSES, 3, 252)[3]).toBeCloseTo(handDerived, 10);
+  });
+
+  test('비유한수·0 이하 종가는 null 처럼 전파된다(조용히 이상한 숫자를 만들지 않는다)', () => {
+    expect(computeLogReturns([100, NaN, 101])).toEqual([null, null, null]);
+    expect(computeLogReturns([100, 0, 101])).toEqual([null, null, null]);
+    expect(rollingDrawdown([100, NaN, 101, 102], 3)).toEqual([null, null, null, null]);
+    expect(rollingSma([100, Infinity, 101], 3)).toEqual([null, null, null]);
+    expect(rollingRealizedVol([100, 101, NaN, 103, 104], 2, 252)[2]).toBeNull();
+    expect(rollingRealizedVol([100, 101, NaN, 103, 104], 2, 252)[3]).toBeNull();
   });
 });
 
@@ -67,5 +78,11 @@ describe('rollingPercentileRank — DESIGN §4.1 확정 정의', () => {
 
   test('W < 2 면 전부 null', () => {
     expect(rollingPercentileRank([1, 2, 3], 1)).toEqual([null, null, null]);
+  });
+
+  test('창 안 NaN 은 null 과 같다 (현재값·다른 원소 모두)', () => {
+    expect(rollingPercentileRank([1, 2, 3, NaN], 4)[3]).toBeNull();
+    expect(rollingPercentileRank([NaN, 1, 2, 3], 4)[3]).toBeNull();
+    expect(rollingPercentileRank([NaN, 1, 2, 3, 4], 4)[4]).toBe(100);
   });
 });

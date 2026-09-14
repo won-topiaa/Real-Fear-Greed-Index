@@ -3,8 +3,8 @@ import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { publishSnapshot, readPublishedSnapshot, SNAPSHOT_PATH } from '../src/publish';
-import { writeJsonAtomic } from '../src/store/FileStore';
+import { HEADERS_FILE, HEADERS_PATH, publishSnapshot, readPublishedSnapshot, SNAPSHOT_PATH, writeHeadersFile } from '../src/publish';
+import { writeJsonAtomic, writeTextAtomic } from '../src/store/FileStore';
 import { computeRfgSeries } from '../../src/core/rfg';
 import { buildSnapshot } from '../../src/core/snapshot';
 import { NYSE_HOLIDAYS } from '../../src/core/calendar';
@@ -49,12 +49,26 @@ test('publishSnapshot: 자기검증 통과 시에만 쓰고, 임시 파일을 �
   }
 });
 
+test('writeHeadersFile: Cloudflare Pages _headers 를 게시 디렉터리에 쓴다', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'rfg-pub-'));
+  try {
+    await writeHeadersFile(dir);
+    const text = await readFile(join(dir, HEADERS_PATH), 'utf8');
+    assert.equal(text, HEADERS_FILE);
+    assert.match(text, /\/v1\/snapshot\.json\n  Cache-Control: public, max-age=600, stale-while-revalidate=86400/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('readPublishedSnapshot: 없거나 깨진 파일은 null', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'rfg-pub-'));
   try {
     assert.equal(await readPublishedSnapshot(dir), null);
     await writeJsonAtomic(join(dir, SNAPSHOT_PATH), { schemaVersion: 2 });
     assert.equal(await readPublishedSnapshot(dir), null);
+    await writeTextAtomic(join(dir, SNAPSHOT_PATH), '{"schemaVersion":1,"gener');
+    assert.equal(await readPublishedSnapshot(dir), null, '잘려 나간 JSON 은 이전 없음으로 취급');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

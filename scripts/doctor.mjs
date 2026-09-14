@@ -123,11 +123,56 @@ if (existsSync(goldenPath)) {
     const dv = Number(/version:\s*(\d+)/.exec(copy)?.[1]);
     g.disclaimerVersion === dv ? ok(`disclaimerVersion ${dv} 일치`) : bad(`골든 disclaimerVersion ${g.disclaimerVersion} ≠ copy.ts ${dv} — proxy build-fixtures 재실행`);
     g.schemaVersion === 1 ? ok('골든 schemaVersion 1') : bad('골든 schemaVersion 이 1 이 아님');
+    const constants = readFileSync(join(root, 'src/core/constants.ts'), 'utf8');
+    const paramsBlock = /export const RFG_PARAMS = \{([\s\S]*?)\} as const;/.exec(constants)?.[1] ?? '';
+    const appParams = Object.fromEntries([...paramsBlock.matchAll(/^\s*([A-Z0-9_]+):\s*([\d.e-]+),/gm)].map((m) => [m[1], Number(m[2])]));
+    const diff = Object.keys(appParams).filter((k) => g.params?.[k] !== appParams[k]);
+    diff.length === 0 && Object.keys(appParams).length > 0 ? ok('골든 params == RFG_PARAMS') : bad(`골든 params 가 RFG_PARAMS 와 다름: ${diff.join(', ') || '파싱 실패'} — proxy build-fixtures 재실행`);
   } catch (e) {
     bad(`골든 스냅샷 파싱 실패: ${e.message}`);
   }
 } else {
   warn('proxy/test/golden/snapshot.json 없음 — cd proxy && npm run build-fixtures');
+}
+
+console.log('빌드 산출물(있으면)');
+const aitFiles = readdirSync(root).filter((f) => f.endsWith('.ait'));
+if (aitFiles.length === 0) {
+  ok('.ait 없음(검사 생략)');
+} else {
+  try {
+    // 의존성 없는 ZIP 중앙 디렉터리 읽기(.ait 는 zip). 파일명 → 압축 전 크기.
+    const buf = readFileSync(join(root, aitFiles[0]));
+    let eocd = -1;
+    for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65_557); i--) {
+      if (buf.readUInt32LE(i) === 0x06054b50) {
+        eocd = i;
+        break;
+      }
+    }
+    if (eocd < 0) throw new Error('EOCD 를 찾지 못함');
+    const count = buf.readUInt16LE(eocd + 10);
+    let off = buf.readUInt32LE(eocd + 16);
+    // 앞에 여분 바이트가 붙은 zip 은 중앙 디렉터리 오프셋이 어긋날 수 있어 시그니처를 다시 찾는다.
+    if (buf.readUInt32LE(off) !== 0x02014b50) off = buf.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]));
+    const sizes = {};
+    for (let n = 0; n < count && off >= 0 && off + 46 <= buf.length; n++) {
+      if (buf.readUInt32LE(off) !== 0x02014b50) break;
+      const size = buf.readUInt32LE(off + 24);
+      const nameLen = buf.readUInt16LE(off + 28);
+      const extraLen = buf.readUInt16LE(off + 30);
+      const commentLen = buf.readUInt16LE(off + 32);
+      const name = buf.toString('utf8', off + 46, off + 46 + nameLen);
+      sizes[name] = size;
+      off += 46 + nameLen + extraLen + commentLen;
+    }
+    const ios84 = sizes['bundle.ios.0_84_0.js'];
+    const ios72 = sizes['bundle.ios.0_72_6.js'];
+    if (ios84 && ios72 && ios84 !== ios72) ok(`${aitFiles[0]}: 두 런타임 번들 크기가 다름 (0.84 ${ios84} / 0.72 ${ios72})`);
+    else bad(`${aitFiles[0]}: 두 런타임 번들이 같거나 없음 — granite.config.ts 의 target 오염 의심`);
+  } catch (e) {
+    warn(`.ait 검사 실패: ${e.message}`);
+  }
 }
 
 console.log('라우트 동기화');

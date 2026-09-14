@@ -9,7 +9,8 @@ export const Route = createRoute('/about', {
 
 function readAppInfo(): { appName: string; deploymentId: string } | undefined {
   try {
-    return { appName: env.getAppName(), deploymentId: env.getDeploymentId() };
+    // 타입은 string 이지만 런타임에서 undefined 일 수 있다(global.__appsInToss?.deploymentId)
+    return { appName: String(env.getAppName() ?? ''), deploymentId: String(env.getDeploymentId() ?? '') };
   } catch {
     return undefined;
   }

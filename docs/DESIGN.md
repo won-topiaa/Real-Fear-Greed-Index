@@ -243,7 +243,7 @@ CNN은 장중에도 값을 갱신하므로 "거래일 t의 FG_t"를 정의해야
 
 원시 float로 판정하고 반올림 정수를 보여주면 "P 69.6 → 화면 70, 사분면은 Q1 아님"이 생긴다. 규칙:
 
-- `roundTo(v, digits)` 한 함수만 쓴다(`Math.round(v·10^d)/10^d`).
+- `roundTo(v, digits)` 한 함수만 쓴다. .5 는 **0 에서 먼 쪽**으로(half away from zero, 음수에도 대칭). 판정에 쓰는 값은 모두 0 이상이라 JS `Math.round` 와 같다. 이진 표현 오차(1.005)는 (1+ε) 보정으로 흡수. NaN/±∞ 는 core 전반에서 null 과 같이 취급한다.
 - 점수(FG, Fear, P, RFG)는 **정수**로, FRM은 **소수 2자리**로 반올림한 값을 **표시에도, 판정에도** 쓴다. `classify()`가 내부에서 같은 반올림을 적용한다.
 - 스냅샷에는 원시 값을 싣고(백테스트·재현용), 화면과 `classify`는 반올림 값을 본다.
 - 테스트: 경계 ±0.5 케이스(P=69.5 → 70 → Q1 조건 충족, P=69.49 → 69 → 미충족; FRM=1.495 → 1.50 → ALIGNED, 1.505 → 1.51 → HIDDEN_CRASH).
@@ -430,8 +430,10 @@ export function parseSnapshot(input: unknown): { ok: true; value: RfgSnapshot } 
 export function forwardReturns(closes: readonly number[], horizon: number): (number | null)[];      // ln(close[t+h]/close[t])
 export interface BacktestReport {
   horizons: number[];
+  evaluableRows: number;                                                                  // P·FG 모두 있는 행 수 (signalsPerYear 분모)
   strategies: Record<'rfg-buy' | 'cnn-only-fear65' | 'q4-bear-trap' | 'q1-capitulation' | 'risk', {
-    count: number; meanReturn: number[]; medianReturn: number[]; winRate: number[]; maxUnderwater: number; signalsPerYear: number;
+    count: number; events: number; n: number[]; meanReturn: number[]; medianReturn: number[]; winRate: number[]; snr: number[];
+    maxUnderwater: number; meanUnderwater: number; meanUnderwaterDays: number; signalsPerYear: number;
   }>;
   fgCoverage: { from: IsoDate | null; to: IsoDate | null; rowsWithFg: number };          // FG 소스 구간은 파이프라인 status 가 보고
 }
@@ -639,6 +641,8 @@ proxy/
 | `GET /v1/status.json` | 아래 | `max-age=60` |
 | `GET /static/icon.png` | 앱 아이콘 512×512 (`brand.icon` URL) | 길게 |
 
+캐시 헤더는 파이프라인이 `public/_headers`(Cloudflare Pages 형식)로 함께 게시한다. 실패한 실행도 `status.json` 과 `_headers` 는 게시된다(`snapshot.json` 은 검증 통과 시에만 바뀜).
+
 `status.json`:
 
 ```json
@@ -714,7 +718,7 @@ collect:
 
 ### 8.3 `predeploy` (npm `predeploy` 훅, `ait deploy` 전에 자동 실행)
 
-1. `doctor` 통과. 2. `apiBaseUrl`이 `https://`이고 `/`로 끝나지 않음(목 모드 배포 차단). 3. `CI`, `CLAUDE_CODE`, `CODESPACES`, `SSH_CONNECTION` 중 하나라도 있으면 `ALLOW_REMOTE_DEPLOY=1` 없이는 실패(교훈 §6 "원격 세션에서 배포하면 목 앱이 올라간다"). 4. dirty tree면 경고. 5. `~/.ait/credentials` 프로필이 2개 이상이면 경고.
+1. `doctor` 통과. 2. `apiBaseUrl`이 `https://`이고 `/`로 끝나지 않음(목 모드 배포 차단). 3. `CI`, `CODESPACES`, `SSH_CONNECTION`, `GITHUB_ACTIONS`, `CLAUDECODE`, `CLAUDE_CODE_*` 중 하나라도 있으면 `ALLOW_REMOTE_DEPLOY=1` 없이는 실패(교훈 §6 "원격 세션에서 배포하면 목 앱이 올라간다"). Claude Code 의 실제 변수명은 `CLAUDECODE` 다(실측). 4. dirty tree면 경고. 5. `~/.ait/credentials` 프로필이 2개 이상이면 경고.
 
 ### 8.4 릴리즈 절차 (`docs/runbook.md`로 옮겨 유지)
 
@@ -774,7 +778,7 @@ collect:
 | `round.test.ts` | `roundTo` 반올림 규칙, 음수, `roundForDisplay` null 전파 |
 | `validate.test.ts` | 역순, 중복, `.`값, 26% 갭, 12일 공백, 교차검증 0.1% |
 | `calendar.test.ts` | DST 경계(3월 둘째 일요일·11월 첫째 일요일 전후 epoch → ET 날짜/오프셋 고정값), `expectedLatestTradingDate`(16:00 ET 전후, 주말, 휴장일), `closeAtUtcOf`, `tradingDaysBetween` |
-| `freshness.test.ts` | 금요일 마감 스냅샷을 월요일 아침에 봐도 fresh; 3거래일 초과 stale; 스냅샷 48h 초과 시 기기 시각 재계산 |
+| `snapshot.test.ts` (freshness 포함) | 금요일 마감 스냅샷을 월요일 아침에 봐도 fresh; 3거래일 초과 stale; 스냅샷 48h 초과 시 기기 시각 재계산 |
 | `snapshot.test.ts` | `buildSnapshot` 골든 비교(원시 close 미포함, history 60행); `parseSnapshot` 필드 누락/타입/범위/버전 각각 실패 코드 |
 | `backtest.test.ts` | `forwardReturns` 끝 null; 픽스처로 `evaluateSignals` 골든 |
 | `text/__tests__/*.test.ts` | 포맷 테이블(반올림·U+2212·null), `formatKst('2026-09-11T20:00:00Z')→9/12 05:00`, `'2026-01-16T21:00:00Z'→06:00`; `COPY.*`가 THRESHOLDS/RFG_PARAMS 값을 포함; `selectHomeViewModel` 상태표 10행 |

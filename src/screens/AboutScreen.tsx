@@ -2,7 +2,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { RFG_PARAMS } from '../core/constants';
-import { useRfgSnapshot } from '../data/useRfgSnapshot';
+import { useCachedSnapshot } from '../data/useCachedSnapshot';
 import { COPY, DISCLAIMER } from '../text/copy';
 import { formatKst } from '../text/format';
 import { Txt } from '../ui/primitives';
@@ -15,8 +15,7 @@ function paramsDiffer(server: Record<string, number> | undefined): boolean {
 }
 
 export function AboutScreen({ appInfo }: { appInfo?: { appName: string; deploymentId: string } }) {
-  const { state } = useRfgSnapshot();
-  const snapshot = state.status === 'success' ? state.data : state.cached;
+  const snapshot = useCachedSnapshot();
   const indicators = COPY.describeIndicators();
   const generated = snapshot ? formatKst(snapshot.generatedAtUtc) : null;
 
@@ -87,10 +86,10 @@ export function AboutScreen({ appInfo }: { appInfo?: { appName: string; deployme
           {DISCLAIMER.full}
         </Txt>
       </Section>
-      {appInfo ? (
+      {appInfo && appInfo.appName ? (
         <Section>
           <Txt variant="caption" tone="muted">
-            {appInfo.appName} · {appInfo.deploymentId}
+            {appInfo.deploymentId ? `${appInfo.appName} · ${appInfo.deploymentId}` : appInfo.appName}
           </Txt>
         </Section>
       ) : null}

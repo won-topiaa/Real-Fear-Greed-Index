@@ -17,6 +17,13 @@ describe('roundTo — 반올림 한 곳', () => {
     expect(Object.is(roundTo(-0.04, 1), 0)).toBe(true);
   });
 
+  test('.5 는 0 에서 먼 쪽으로 — 음수에도 대칭 (DD/DISP 표시)', () => {
+    expect(roundTo(-26.5, 0)).toBe(-27);
+    expect(roundTo(-2.65, 1)).toBe(-2.7);
+    expect(roundTo(2.65, 1)).toBe(2.7);
+    expect(roundTo(-4.35, 1)).toBe(-4.4);
+  });
+
   test('비유한수는 그대로', () => {
     expect(roundTo(NaN, 1)).toBeNaN();
   });

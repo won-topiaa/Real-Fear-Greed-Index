@@ -17,6 +17,13 @@ describe('alignFgToTradingDays — as-of 조인 (DESIGN §3.4)', () => {
     expect(out[0]).toEqual({ fg: null, fgDate: null, fgStaleDays: null }); // 7일
   });
 
+  test('경계: 정확히 5달력일은 유지(fgStaleDays 5), 6일은 결측', () => {
+    const five = alignFgToTradingDays(['2026-09-14'], [{ date: '2026-09-09', value: 41, source: 'own' }], 5);
+    expect(five[0]).toEqual({ fg: 41, fgDate: '2026-09-09', fgStaleDays: 5 });
+    const six = alignFgToTradingDays(['2026-09-14'], [{ date: '2026-09-08', value: 41, source: 'own' }], 5);
+    expect(six[0]).toEqual({ fg: null, fgDate: null, fgStaleDays: null });
+  });
+
   test('미래 관측은 쓰지 않고, 출력 길이는 거래일 수와 같다(휴장일 FG 는 행을 만들지 않음)', () => {
     const fg: FgPoint[] = [
       { date: '2026-09-15', value: 50, source: 'own' },

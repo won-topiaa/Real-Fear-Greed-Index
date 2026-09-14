@@ -6,7 +6,8 @@ import { test } from 'node:test';
 import { collect } from '../src/collect';
 import { DEFAULT_ENV } from '../src/env';
 import { collectingLogger } from '../src/log';
-import { STATUS_PATH } from '../src/publish';
+import { HEADERS_PATH, STATUS_PATH } from '../src/publish';
+import { writeTextAtomic } from '../src/store/FileStore';
 import { cnnJson, fakeFetch, fredJson, stooqCsv, yahooJson } from '../src/synth';
 import { makeScenario, SCENARIO_NOW_UTC } from '../src/synth/scenarios';
 import { classify } from '../../src/core/classify';
@@ -120,6 +121,37 @@ test('CNN 이 막히고 히스토리도 없으면 fg-missing 으로 게시(P 만
     assert.equal(r.snapshot?.markets.SPX.latest.fg, null);
     assert.ok(r.snapshot?.markets.SPX.latest.p != null);
     assert.equal(classify(r.snapshot!.markets.SPX.latest).quadrant, 'UNKNOWN');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('깨진 이전 스냅샷(잘린 JSON)이 있어도 실행이 이어지고 status·_headers 가 써진다', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'rfg-collect-'));
+  try {
+    await writeTextAtomic(join(dir, 'public', 'v1', 'snapshot.json'), '{"schemaVersion":1,"gener');
+    const r = await run(dir, routesFor('normal'));
+    assert.equal(r.result, 'ok');
+    const status = JSON.parse(await readFile(join(dir, 'public', STATUS_PATH), 'utf8')) as StatusJson;
+    assert.equal(status.result, 'ok');
+    assert.equal(status.published.unchanged, false);
+    assert.ok((await readFile(join(dir, 'public', HEADERS_PATH), 'utf8')).includes('/v1/snapshot.json'));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('예기치 못한 예외(데이터 디렉터리 쓰기 불가)에도 status.json 은 failed 로 써진다', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'rfg-collect-'));
+  try {
+    // dataDir 를 파일로 만들어 FileStore 쓰기를 실패시킨다
+    await writeTextAtomic(join(dir, 'cache'), 'not a dir');
+    const r = await run(dir, routesFor('normal'));
+    assert.equal(r.result, 'failed');
+    assert.equal(r.snapshot, null);
+    const status = JSON.parse(await readFile(join(dir, 'public', STATUS_PATH), 'utf8')) as StatusJson;
+    assert.equal(status.result, 'failed');
+    assert.ok(status.errors.some((e) => e.startsWith('unexpected:')));
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
