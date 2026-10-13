@@ -19,7 +19,9 @@ cd proxy && npm ci && cp .env.example .env && cd ..
 
 ## 2. M2 0번 작업 — 외부 응답 형태 확정 [검증 필요 해소]
 
-이 코드는 네트워크가 차단된 환경에서 "알려진 형태"를 가정해 작성됐다. 로컬에서 아래를 **한 번** 돌려 형태를 확정한다.
+이 코드는 네트워크가 차단된 환경에서 "알려진 형태"를 가정해 작성됐다. 로컬에서 아래를 **한 번** 돌려 형태를 확정한다. FRED 키가 없으면 CNN·Stooq·Yahoo 3개만 먼저 돌려도 된다.
+
+### 2-1. 실행
 
 ```
 cd proxy
@@ -27,17 +29,98 @@ node scripts/inspect.mjs --source cnn --save
 node scripts/inspect.mjs --source fred --symbol SPX --save
 node scripts/inspect.mjs --source stooq --symbol SPX --save
 node scripts/inspect.mjs --source yahoo --symbol SPX --save
+node scripts/inspect.mjs --source fred --symbol NDX --save
+node scripts/inspect.mjs --source stooq --symbol NDX --save
+node scripts/inspect.mjs --source yahoo --symbol NDX --save
 ```
 
-| 확인 | 맞으면 | 다르면 |
-|---|---|---|
-| CNN `historical.data[].x` 의 `utcMidnight=true` 이고 `utcDate == nyDate` | `cnnEpochToDate` 그대로 | `src/sources/cnn.ts` 의 `cnnEpochToDate` 규칙을 실측에 맞게 바꾸고 `test/sources.test.ts` 갱신 |
-| CNN `fear_and_greed.timestamp` 존재, 뉴욕 날짜 == 직전 거래일 | 그대로 | 없으면 `fg-date-mismatch` 검사가 자동으로 건너뜀(문제 없음) |
-| FRED 마지막 `date` == 전일 거래일(22:30 UTC 기준) | 그대로 | 자주 하루 늦으면 `src/sources/price.ts` 의 `PRICE_ADAPTERS` 순서를 `[stooq, fred, yahoo]` 로 |
-| Stooq 헤더 `Date,Open,High,Low,Close,Volume` | 그대로 | `parseStooq` 컬럼 이름 수정 |
-| Yahoo `timestamp` 가 초 단위, `close` 에 null 포함 | 그대로 | `normalizeYahoo` 수정 |
+각 명령은 `status=200 ...` 으로 시작하는 형태 요약을 출력하고 `--save` 가 붙으면 `test/fixtures/` 에 실응답 파일을 저장한다.
 
-저장된 `test/fixtures/*.recorded.*` 로 `test/sources.test.ts` 의 합성 픽스처를 교체한다. CNN 은 히스토리를 30일로 잘라 저장된다(라이선스 최소화).
+### 2-2. 소스별 확인 체크리스트
+
+#### CNN
+
+출력 예시:
+
+```
+status=200 content-type=application/json bytes=...
+fear_and_greed keys: score, rating, timestamp, ...
+timestamp → NY date 2026-10-10
+historical points: ~365
+  x=... utcMidnight=true utcDate=2025-... nyDate=2025-...
+```
+
+| # | 확인 | 맞으면 | 다르면 |
+|---|---|---|---|
+| 1 | `historical.data[].x` 의 `utcMidnight=true` 이고 `utcDate == nyDate` | `cnnEpochToDate` 그대로 | `src/sources/cnn.ts` 의 `cnnEpochToDate` 규칙을 실측에 맞게 바꾸고 `test/sources.test.ts` 갱신 |
+| 2 | `fear_and_greed.timestamp` 존재 | 그대로 | 없으면 `fg-date-mismatch` 검사가 자동으로 건너뜀(문제 없음) |
+| 3 | `timestamp → NY date` 가 직전 거래일 | 그대로 | 날짜가 다르면 기록해두기(파서 수정은 불필요) |
+
+#### FRED
+
+출력 예시:
+
+```
+status=200 content-type=application/json bytes=...
+shape: { ... observations: array(N) of { date: string, value: string } }
+observations: 2400+, first: 2015-01-02, last: 2026-10-10, dots: 몇 개
+```
+
+| # | 확인 | 맞으면 | 다르면 |
+|---|---|---|---|
+| 1 | `last` 날짜가 전일 거래일 (22:30 UTC 이전이면 이틀 전일 수 있음) | 그대로 | 자주 하루 늦으면 `src/sources/price.ts` 의 `PRICE_ADAPTERS` 순서를 `[stooq, fred, yahoo]` 로 |
+| 2 | `dots` 가 0 이상 | 그대로(`.` 제거 로직 존재) | — |
+
+#### Stooq
+
+출력 예시:
+
+```
+status=200 content-type=text/csv bytes=...
+header: Date,Open,High,Low,Close,Volume
+rows: 수천, first: 옛날, last: 2026-10-10
+```
+
+| # | 확인 | 맞으면 | 다르면 |
+|---|---|---|---|
+| 1 | 헤더가 `Date,Open,High,Low,Close,Volume` 정확히 이 순서 | 그대로 | `parseStooq` 컬럼 이름 수정 |
+| 2 | `status=200` 이고 데이터 있음 (`No data` 가 아님) | 그대로 | 시간을 바꿔 재시도 |
+
+#### Yahoo
+
+출력 예시:
+
+```
+status=200 content-type=application/json bytes=...
+shape: { chart: { result: array(1) of { ... timestamp: array(N) ... }, error: null } }
+timestamps: ~22, first → NY ..., last → NY 2026-10-10
+```
+
+| # | 확인 | 맞으면 | 다르면 |
+|---|---|---|---|
+| 1 | `timestamp` 가 초 단위(10자리 숫자) | 그대로 | 밀리초(13자리)면 `normalizeYahoo` 에서 `*1000` 제거 |
+| 2 | `close` 배열에 null 포함 가능 | 그대로(제거 로직 존재) | — |
+
+### 2-3. 확인 후 처리
+
+**형태가 모두 맞으면:**
+
+```
+ls test/fixtures/
+```
+
+`cnn.SPX.recorded.json`, `fred.SPX.recorded.json`, `stooq.SPX.recorded.csv`, `yahoo.SPX.recorded.json` 등 7개 파일이 있어야 한다. CNN 히스토리는 30일로 잘려 저장된다(라이선스 최소화).
+
+```
+cd ..
+git add proxy/test/fixtures/
+git commit -m "chore: add recorded API response fixtures from inspect"
+git push
+```
+
+이후 `test/sources.test.ts` 에서 합성 픽스처를 recorded 파일로 교체하고 `[검증 필요]` 를 제거한다.
+
+**형태가 다르면:** 어느 소스의 어떤 필드가 다른지 기록하고 파서를 실측에 맞게 고친 뒤 테스트를 갱신한다.
 
 ---
 
