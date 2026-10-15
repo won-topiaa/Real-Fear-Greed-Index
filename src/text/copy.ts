@@ -3,9 +3,9 @@
  * 행동을 지시하는 문구(사고팔라는 권유 등)는 쓰지 않는다 — 지수와 국면 서술만. doctor 가 금지 단어를 검사한다.
  * 순수 TS: react/react-native import 금지(스토어 그림 스크립트가 그대로 import).
  */
-import { DATA_GATES, RFG_PARAMS as P, THRESHOLDS as T } from '../core/constants';
+import { DATA_GATES, DISPLAY_BANDS, RFG_PARAMS as P, THRESHOLDS as T } from '../core/constants';
 import type { Freshness } from '../core/freshness';
-import type { FrmZone, IndexSymbol, Quadrant, RfgZone } from '../core/types';
+import type { Band, FrmZone, IndexSymbol, Quadrant, RfgZone } from '../core/types';
 
 export const APP_TITLE = '실질 공포탐욕지수';
 
@@ -19,11 +19,21 @@ export const DISCLAIMER = {
     '심리 지표는 비공식 경로로 수집한 값이라 예고 없이 중단될 수 있어요.',
 } as const;
 
+const LABELS_BAND_TEXT: Record<Band, string> = {
+  EXTREME_FEAR: '극단적 공포',
+  FEAR: '공포',
+  NEUTRAL: '중립',
+  GREED: '탐욕',
+  EXTREME_GREED: '극단적 탐욕',
+  UNKNOWN: '판정 불가',
+};
+
 export const LABELS: {
   index: Record<IndexSymbol, string>;
   quadrant: Record<Quadrant, string>;
   rfgZone: Record<RfgZone, string>;
   frmZone: Record<FrmZone, string>;
+  band: Record<Band, string>;
   axis: { fear: string; p: string; frm: string; rfg: string; fg: string };
 } = {
   index: { SPX: 'S&P 500', NDX: '나스닥 100' },
@@ -43,8 +53,49 @@ export const LABELS: {
     SUPPRESSED: '표시 안 함',
     UNKNOWN: '판정 불가',
   },
+  band: LABELS_BAND_TEXT,
   axis: { fear: '심리 공포도', p: '실질 훼손도', frm: '전이 배수', rfg: '실질 공포탐욕지수', fg: '심리 지수' },
 };
+
+/** 웹 화면(web/) 문구. 숫자는 core 상수를 보간한다. 행동 지시 없이 지수만 서술한다. */
+export const WEB_COPY = {
+  subtitle: 'CNN 공포·탐욕 지수(심리)에 S&P 500·나스닥 100의 실제 가격 훼손을 더해, 시장이 실제로 얼마나 무서워하는지 0~100으로 보여줘요.',
+  scaleEnds: { fear: '공포', greed: '탐욕' },
+  compareTitle: '과거 값',
+  compare: { prev: '전일', week: '1주 전', month: '1개월 전', year: '1년 전' },
+  chartTitle: '1년 추이',
+  chartEmpty: '추이를 그릴 이력이 아직 없어요.',
+  componentsTitle: '구성 요소',
+  componentsNote: '모든 막대는 0(공포) ~ 100(탐욕) 같은 방향이에요.',
+  sentiment: '심리 · CNN 공포·탐욕 지수',
+  price: '실질 가격 · 100 − 가격 훼손도',
+  dd: (v: string): string => `${P.DD_WINDOW_N}거래일 고점 대비 ${v}`,
+  disp: (v: string): string => `${P.SMA_WINDOW_M}일 이동평균 대비 ${v}`,
+  rv: (v: string): string => `${P.RV_WINDOW_K}일 실현 변동성 ${v}`,
+  ddName: '낙폭',
+  dispName: '이격도',
+  rvName: '변동성',
+  method: (): string =>
+    `지수 = ${P.W1_SENTIMENT} × 심리 + ${P.W2_PRICE} × 실질 가격을 ${P.RFG_EMA_SPAN}일 지수이동평균으로 다듬은 값이에요. ` +
+    `실질 가격은 낙폭·이격도·변동성을 각각 최근 ${P.PERCENTILE_WINDOW_W}거래일 안의 백분위로 바꿔 ${P.ALPHA_DD}/${P.BETA_DISP}/${P.GAMMA_RV}로 섞어요. ` +
+    `구간은 ${LABEL_RANGES()}.`,
+  tableTitle: '최근 값 표로 보기',
+  tableHead: { date: '날짜', rfg: '지수', band: '구간' },
+  loading: '불러오는 중…',
+  error: '값을 불러오지 못했어요.',
+  retry: '다시 시도',
+  updated: (kst: string): string => `갱신 ${kst} (한국 시간)`,
+  sources: '심리: CNN Business Fear & Greed Index(비공식 경로로 수집). 지수: FRED. 참고용이며 실시간이 아니에요.',
+} as const;
+
+function LABEL_RANGES(): string {
+  let lo = 0;
+  return DISPLAY_BANDS.map((b) => {
+    const s = `${LABELS_BAND_TEXT[b.key]} ${lo}–${b.max}`;
+    lo = b.max + 1;
+    return s;
+  }).join(' · ');
+}
 
 /** 국면 서술. 행동 지시 없음. */
 export const QUADRANT_DESCRIPTION: Record<Quadrant, string> = {

@@ -19,16 +19,35 @@ export function compositeDamage(
 
 const negate = (xs: readonly (number | null)[]): (number | null)[] => xs.map((x) => (x == null ? null : -x));
 
-/** 종가 시계열 → DD/DISP/RV/Composite/P 행. FG 는 여기서 다루지 않는다. v2 에서 composite 는 P 와 같은 값이다. */
-export function computePriceDamage(prices: readonly PricePoint[], p: RfgParams = RFG_PARAMS): DamageRow[] {
+export interface ComponentSeries {
+  dd: (number | null)[];
+  disp: (number | null)[];
+  rv: (number | null)[];
+  /** 성분별 W 롤링 백분위(0~100, 클수록 훼손). 낙폭·이격도는 부호를 뒤집어 백분위를 낸다. */
+  pdd: (number | null)[];
+  pdisp: (number | null)[];
+  prv: (number | null)[];
+}
+
+/** 종가 → 세 성분의 원시값과 성분별 백분위. computePriceDamage 와 웹 구성 요소 카드가 같이 쓴다. */
+export function computeComponentSeries(prices: readonly PricePoint[], p: RfgParams = RFG_PARAMS): ComponentSeries {
   const closes = prices.map((x) => x.close);
   const dd = rollingDrawdown(closes, p.DD_WINDOW_N);
   const disp = rollingDisparity(closes, p.SMA_WINDOW_M);
   const rv = rollingRealizedVol(closes, p.RV_WINDOW_K, p.ANNUALIZATION_DAYS);
-  // 훼손이 클수록 백분위가 커지도록 낙폭·이격도는 부호를 뒤집는다.
-  const pdd = rollingPercentileRank(negate(dd), p.PERCENTILE_WINDOW_W);
-  const pdisp = rollingPercentileRank(negate(disp), p.PERCENTILE_WINDOW_W);
-  const prv = rollingPercentileRank(rv, p.PERCENTILE_WINDOW_W);
+  return {
+    dd,
+    disp,
+    rv,
+    pdd: rollingPercentileRank(negate(dd), p.PERCENTILE_WINDOW_W),
+    pdisp: rollingPercentileRank(negate(disp), p.PERCENTILE_WINDOW_W),
+    prv: rollingPercentileRank(rv, p.PERCENTILE_WINDOW_W),
+  };
+}
+
+/** 종가 시계열 → DD/DISP/RV/Composite/P 행. FG 는 여기서 다루지 않는다. v2 에서 composite 는 P 와 같은 값이다. */
+export function computePriceDamage(prices: readonly PricePoint[], p: RfgParams = RFG_PARAMS): DamageRow[] {
+  const { dd, disp, rv, pdd, pdisp, prv } = computeComponentSeries(prices, p);
   return prices.map((pt, t) => {
     const composite = compositeDamage(pdd[t] ?? null, pdisp[t] ?? null, prv[t] ?? null, p);
     return {

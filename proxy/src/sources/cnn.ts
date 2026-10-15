@@ -10,6 +10,14 @@ import type { FgPoint, IsoDate } from '../../../src/core/types';
 import type { Env } from '../types';
 
 export const CNN_URL = 'https://production.dataviz.cnn.io/index/fearandgreed/graphdata';
+/** 날짜를 붙이면 그날 이후 이력을 준다(없으면 최근 1년). 2020-07-15 이전 날짜는 500 이라 그보다 앞으로는 요청하지 않는다(2026-10-15 실측). */
+export const CNN_EARLIEST = '2020-07-15';
+/** 웹 1년 추이·1년 전 비교가 비지 않도록 기대 거래일보다 이만큼(달력일) 앞부터 받는다 */
+export const CNN_BACKFILL_DAYS = 730;
+
+export function cnnUrl(from: IsoDate): string {
+  return `${CNN_URL}/${from < CNN_EARLIEST ? CNN_EARLIEST : from}`;
+}
 
 export interface CnnParsed {
   current: { score: number; rating: string | null; timestamp: string | null };

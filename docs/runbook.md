@@ -171,7 +171,7 @@ cloudflared tunnel --url http://localhost:8787
 게시는 **Cloudflare Workers 정적 자산**이다(`proxy/wrangler.jsonc`, 코드 없이 `public/` 만 서빙, `_headers` 그대로 적용).
 Cloudflare Pages 는 Workers 로 통합되는 중이라 wrangler 4.13x 의 `pages project create` 가 Workers 로 넘겨져 실패한다(2026-10-15 실측). 변수 이름 `PAGES_*` 는 그대로 쓴다.
 
-1. 첫 게시(이 맥, `wrangler login` 상태): `cd proxy && npm run collect && npx wrangler deploy`. 출력의 `https://rfg-data.<계정>.workers.dev` 가 호스트다.
+1. 첫 게시(이 맥, `wrangler login` 상태): `cd proxy && npm run collect && npm run build-web && npx wrangler deploy`. 출력의 `https://rfg-data.<계정>.workers.dev` 가 호스트다.
    GitHub **Variables** `PAGES_PROJECT=rfg-data`, `PAGES_HOST=rfg-data.<계정>.workers.dev`.
 2. GitHub **Secrets**: `FRED_API_KEY`, `CLOUDFLARE_API_TOKEN`(대시보드 → My Profile → API Tokens → "Edit Cloudflare Workers" 템플릿, Account Resources 는 이 계정만), `CLOUDFLARE_ACCOUNT_ID`, `HEALTHCHECKS_PING_URL`.
 3. GitHub **Variables**(선택): `CNN_USER_AGENT`.
@@ -182,7 +182,7 @@ Cloudflare Pages 는 Workers 로 통합되는 중이라 wrangler 4.13x 의 `page
 Actions 러너 IP 가 CNN 봇 방어에 걸리면(`status.sources[cnn].error = http_403`), 수집기를 집 맥의 launchd 로 옮긴다:
 
 ```
-cd proxy && npm run collect && npx wrangler deploy
+cd proxy && npm run collect && npm run build-web && npx wrangler deploy
 ```
 
 코드는 같고 실행 위치만 다르다.

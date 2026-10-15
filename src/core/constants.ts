@@ -81,6 +81,24 @@ export const DATA_GATES = {
 
 export type DataGates = { -readonly [K in keyof typeof DATA_GATES]: number };
 
+/**
+ * 웹 게이지의 5구간(CNN 공포·탐욕 지수 관례: 0–24 / 25–44 / 45–55 / 56–75 / 76–100). 표시 전용 — 판정은 반올림한 정수로.
+ * 각 구간의 상한(포함). 앱의 rfgZone(≤20 실질적 항복, ≥80 실질적 과열)과는 별개다.
+ */
+export const DISPLAY_BANDS = [
+  { key: 'EXTREME_FEAR', max: 24 },
+  { key: 'FEAR', max: 44 },
+  { key: 'NEUTRAL', max: 55 },
+  { key: 'GREED', max: 75 },
+  { key: 'EXTREME_GREED', max: 100 },
+] as const;
+
+/** 웹의 과거 값 비교(거래일 전): 전일·1주·1개월·1년. 표시 전용 */
+export const COMPARE_OFFSETS = { prev: 1, week: 5, month: 21, year: 252 } as const;
+
+/** 공개 1년 이력(history.json)의 길이(거래일). 1년 전 비교(252거래일 전)를 담고 남는 여유. 보고서 외 */
+export const HISTORY_LONG_DAYS = 260;
+
 export const DISPLAY_DIGITS = {
   /** FG, Fear, P, RFG — 정수 */
   score: 0,

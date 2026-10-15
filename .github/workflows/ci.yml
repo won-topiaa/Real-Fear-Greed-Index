@@ -33,3 +33,5 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      # 웹 화면 타입 검사 + 번들(web/ 가 src/core·src/text 를 그대로 쓴다)
+      - run: npm run build-web

@@ -49,6 +49,8 @@ jobs:
         run: |
           mkdir -p public/v1
           curl -fsSL "https://${PAGES_HOST}/v1/snapshot.json" -o public/v1/snapshot.json || true
+          # 이력은 두 지수가 모두 새로 계산될 때만 바뀐다 — 실패한 날 배포가 이전 이력을 지우지 않도록 받아 둔다
+          curl -fsSL "https://${PAGES_HOST}/v1/history.json" -o public/v1/history.json || true
         env:
           PAGES_HOST: ${{ vars.PAGES_HOST }}
       - name: Collect
@@ -63,6 +65,10 @@ jobs:
         with:
           path: proxy/.cache
           key: rfg-cache-${{ github.run_id }}
+      # 웹 화면(web/ → index.html·app.js·style.css). 수집이 실패한 날에도 화면은 이전 데이터로 게시한다.
+      - name: Build web
+        if: always()
+        run: npm run build-web
       # 실패한 실행도 status.json 은 게시한다(snapshot.json 은 검증 통과 시에만 바뀌므로 안전).
       # Cloudflare Workers 정적 자산으로 게시한다(proxy/wrangler.jsonc, 코드 없이 public/ 만 서빙).
       # Cloudflare Pages 는 Workers 로 통합되는 중이라(2026) 새로 만들지 않았다. 변수 이름 PAGES_* 는 그대로 쓴다.

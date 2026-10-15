@@ -11,3 +11,4 @@ export * from './calendar';
 export * from './freshness';
 export * from './snapshot';
 export * from './backtest';
+export * from './history';

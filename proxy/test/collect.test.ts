@@ -6,12 +6,14 @@ import { test } from 'node:test';
 import { collect } from '../src/collect';
 import { DEFAULT_ENV } from '../src/env';
 import { collectingLogger } from '../src/log';
-import { HEADERS_PATH, STATUS_PATH } from '../src/publish';
+import { HEADERS_PATH, HISTORY_PATH, STATUS_PATH } from '../src/publish';
 import { writeTextAtomic } from '../src/store/FileStore';
 import { cnnJson, fakeFetch, fredJson, stooqCsv, yahooJson } from '../src/synth';
 import { makeScenario, SCENARIO_NOW_UTC } from '../src/synth/scenarios';
 import { classify } from '../../src/core/classify';
 import { parseSnapshot } from '../../src/core/snapshot';
+import { parseHistory } from '../../src/core/history';
+import { HISTORY_LONG_DAYS } from '../../src/core/constants';
 import type { StatusJson } from '../src/publish';
 
 const GOLDEN_PATH = new URL('./golden/snapshot.json', import.meta.url);
@@ -69,6 +71,17 @@ test('e2e: 합성 소스 → 스냅샷이 골든과 일치하고 parseSnapshot �
     assert.equal(status.result, 'ok');
     assert.equal(status.published.unchanged, false);
     assert.deepEqual(status.published.markets, { SPX: 'new', NDX: 'new' });
+    // 1년 이력: 계약 통과, HISTORY_LONG_DAYS 행, RFG·P 만(CNN 원값 없음), 마지막 행 = 스냅샷 최신
+    const history = parseHistory(JSON.parse(await readFile(join(dir, 'public', HISTORY_PATH), 'utf8')));
+    assert.ok(history.ok);
+    if (history.ok) {
+      const spx = history.value.markets.SPX;
+      assert.equal(spx.rows.length, HISTORY_LONG_DAYS);
+      assert.deepEqual(Object.keys(spx.rows[0] ?? {}).sort(), ['date', 'p', 'rfg']);
+      assert.equal(spx.rows.at(-1)?.date, r.snapshot?.markets.SPX.closeDate);
+      assert.equal(spx.components.date, r.snapshot?.markets.SPX.closeDate);
+      assert.ok(spx.components.pdd != null && spx.components.pdisp != null && spx.components.prv != null);
+    }
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -96,6 +109,7 @@ test('한 지수의 모든 소스가 죽으면 이전 블록을 유지(partial);
     assert.equal(failed.result, 'failed');
     assert.equal(failed.snapshot, null);
     await assert.rejects(() => readFile(join(dir, 'public', 'v1', 'snapshot.json')));
+    await assert.rejects(() => readFile(join(dir, 'public', HISTORY_PATH)));
     const status = JSON.parse(await readFile(join(dir, 'public', STATUS_PATH), 'utf8')) as StatusJson;
     assert.equal(status.result, 'failed');
     assert.ok(status.errors.some((e) => e.startsWith('NDX')));

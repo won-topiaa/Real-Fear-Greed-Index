@@ -5,12 +5,14 @@
  */
 import { NYSE_HOLIDAYS, expectedLatestTradingDate, nyDateOf } from '../../src/core/calendar';
 import { DATA_GATES, RFG_PARAMS, minClosesForSnapshot } from '../../src/core/constants';
+import { computeComponentSeries } from '../../src/core/damage';
+import { buildHistory } from '../../src/core/history';
 import { computeRfgSeries } from '../../src/core/rfg';
 import { buildSnapshot } from '../../src/core/snapshot';
-import type { IndexSymbol, MarketBlock, MarketFlag, RfgRow, RfgSnapshot, ValidationIssue } from '../../src/core/types';
+import type { IndexSymbol, MarketBlock, MarketFlag, PricePoint, RfgRow, RfgSnapshot, ValidationIssue } from '../../src/core/types';
 import { DISCLAIMER } from '../../src/text/copy';
 import { silentLogger } from './log';
-import { publishSnapshot, readPublishedSnapshot, writeHeadersFile, writeStatus, type StatusJson } from './publish';
+import { publishHistory, publishSnapshot, readPublishedSnapshot, writeHeadersFile, writeStatus, type StatusJson } from './publish';
 import { collectFg } from './sources/fg';
 import { PRICE_ADAPTERS, selectPriceSeries } from './sources/price';
 import { FileStore } from './store/FileStore';
@@ -119,6 +121,7 @@ async function collectInner(ctx: Ctx, opts: CollectOptions, runAtUtc: string, ru
 
   // 2. 지수별 종가 → 계산
   const rows: Partial<Record<IndexSymbol, RfgRow[]>> = {};
+  const prices: Partial<Record<IndexSymbol, readonly PricePoint[]>> = {};
   const priceSource: Partial<Record<IndexSymbol, MarketBlock['priceSource']>> = {};
   const flags: Record<IndexSymbol, MarketFlag[]> = { SPX: [...fg.flags], NDX: [...fg.flags] };
   const minCloses = minClosesForSnapshot(RFG_PARAMS, DATA_GATES.HISTORY_DAYS);
@@ -149,6 +152,7 @@ async function collectInner(ctx: Ctx, opts: CollectOptions, runAtUtc: string, ru
     if (sel.crossCheck.length > 0) flags[sym].push('source-mismatch');
     if (sel.reports.some((r) => r.status === 'ok' && r.issues?.some((i) => i.code === 'gap'))) flags[sym].push('gap-warning');
     rows[sym] = computed;
+    prices[sym] = sel.chosen.series;
     priceSource[sym] = sel.chosen.source;
     marketsOrigin[sym] = 'new';
   }
@@ -195,6 +199,21 @@ async function collectInner(ctx: Ctx, opts: CollectOptions, runAtUtc: string, ru
     try {
       await publishSnapshot(opts.outDir, snapshot);
       ctx.log.info(`published snapshot for ${expected} (${status.result}${unchanged ? ', unchanged' : ''})`);
+      // 1년 이력(웹 화면용)은 두 지수가 모두 새로 계산된 경우에만 바꾼다. 아니면 이전 history.json 을 그대로 둔다.
+      if (rows.SPX && rows.NDX && prices.SPX && prices.NDX) {
+        try {
+          await publishHistory(
+            opts.outDir,
+            buildHistory({
+              rows: { SPX: rows.SPX, NDX: rows.NDX },
+              components: { SPX: computeComponentSeries(prices.SPX), NDX: computeComponentSeries(prices.NDX) },
+              generatedAtUtc: runAtUtc,
+            }),
+          );
+        } catch (e) {
+          errors.push(`history: ${e instanceof Error ? e.message : 'publish failed'}`);
+        }
+      }
     } catch (e) {
       errors.push(e instanceof Error ? e.message : 'publish failed');
       snapshot = null;

@@ -1,6 +1,14 @@
-import { DATA_GATES, THRESHOLDS } from './constants';
-import { roundForDisplay } from './round';
-import type { Classification, FrmZone, Quadrant, RfgRow, RfgZone } from './types';
+import { DATA_GATES, DISPLAY_BANDS, DISPLAY_DIGITS, THRESHOLDS } from './constants';
+import { roundForDisplay, roundTo } from './round';
+import type { Band, Classification, FrmZone, Quadrant, RfgRow, RfgZone } from './types';
+
+/** 0~100 점수 → 웹 게이지 5구간. 화면에 보이는 반올림 정수로 판정한다(DESIGN §4.3). */
+export function bandOf(score: number | null | undefined): Band {
+  if (score == null || !Number.isFinite(score)) return 'UNKNOWN';
+  const r = roundTo(score, DISPLAY_DIGITS.score);
+  for (const b of DISPLAY_BANDS) if (r <= b.max) return b.key;
+  return 'EXTREME_GREED';
+}
 
 type Thresholds = typeof THRESHOLDS;
 type Gates = typeof DATA_GATES;

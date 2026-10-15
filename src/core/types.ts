@@ -53,6 +53,8 @@ export interface RfgRow extends DamageRow {
 export type Quadrant = 'Q1' | 'Q2' | 'Q3' | 'Q4' | 'NEUTRAL' | 'UNKNOWN';
 export type RfgZone = 'CAPITULATION' | 'MID' | 'EUPHORIA' | 'UNKNOWN';
 export type FrmZone = 'FAKE_FEAR' | 'ALIGNED' | 'HIDDEN_CRASH' | 'SUPPRESSED' | 'UNKNOWN';
+/** 웹 게이지 5구간(DISPLAY_BANDS) */
+export type Band = 'EXTREME_FEAR' | 'FEAR' | 'NEUTRAL' | 'GREED' | 'EXTREME_GREED' | 'UNKNOWN';
 
 export interface RoundedValues {
   fg: number | null;
@@ -123,4 +125,29 @@ export interface RfgSnapshot {
   disclaimerVersion: number;
   fgSource: 'cnn' | 'own-history';
   markets: Record<IndexSymbol, MarketBlock>;
+}
+
+/** 공개 1년 이력의 한 행. CNN 원값은 싣지 않는다(DESIGN §3.6) — RFG 와 P 만. 소수 2자리. */
+export interface HistoryRow {
+  date: IsoDate;
+  rfg: number | null;
+  p: number | null;
+}
+
+/** 최신 거래일의 가격 훼손 세부 지표. pdd·pdisp·prv 는 성분별 W 백분위(0~100, 클수록 훼손) */
+export interface ComponentsBlock {
+  date: IsoDate;
+  dd: number | null;
+  disp: number | null;
+  rv: number | null;
+  pdd: number | null;
+  pdisp: number | null;
+  prv: number | null;
+}
+
+/** GET /v1/history.json — 웹 화면의 1년 추이·비교·구성 요소 카드용 */
+export interface RfgHistory {
+  schemaVersion: 1;
+  generatedAtUtc: string;
+  markets: Record<IndexSymbol, { rows: HistoryRow[]; components: ComponentsBlock }>;
 }

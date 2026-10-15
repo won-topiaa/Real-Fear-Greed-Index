@@ -12,18 +12,23 @@ const CONTENT_TYPES: Record<string, string> = {
   '.png': 'image/png',
   '.txt': 'text/plain; charset=utf-8',
   '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.svg': 'image/svg+xml',
 };
 
 export function cacheControlFor(urlPath: string): string {
   if (urlPath.endsWith('/v1/status.json')) return 'public, max-age=60';
-  if (urlPath.endsWith('/v1/snapshot.json')) return 'public, max-age=600, stale-while-revalidate=86400';
+  if (urlPath.endsWith('/v1/snapshot.json') || urlPath.endsWith('/v1/history.json')) return 'public, max-age=600, stale-while-revalidate=86400';
   if (urlPath.startsWith('/static/')) return 'public, max-age=86400';
   return 'no-store';
 }
 
 export function startStaticServer(opts: { dir: string; port: number; log?: Logger }): Promise<Server> {
   const server = createServer(async (req, res) => {
-    const urlPath = (req.url ?? '/').split('?')[0] ?? '/';
+    const rawPath = (req.url ?? '/').split('?')[0] ?? '/';
+    // 디렉터리 요청은 index.html 로(Workers 정적 자산의 기본 동작과 같게)
+    const urlPath = rawPath.endsWith('/') ? `${rawPath}index.html` : rawPath;
     const safe = normalize(urlPath).replace(/^(\.\.[/\\])+/, '');
     const filePath = join(opts.dir, safe);
     try {

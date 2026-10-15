@@ -14,6 +14,7 @@ npm run serve
 ```
 
 - `collect` — 기대 최신 거래일을 계산하고 CNN(심리) · FRED/Stooq/Yahoo(종가) 를 수집해 `public/` 에 게시한다. `--now 2026-09-11T22:30:00Z` 로 시각을 고정할 수 있다.
+- `build-web` — `../web` 를 타입 검사하고 `public/` 에 `index.html`·`app.js`·`style.css` 로 빌드한다(배포 전에).
 - `serve` — `public/` 을 로컬에서 서빙한다(개발용). 샌드박스 폰에서 보려면 `cloudflared tunnel --url http://localhost:8787` 로 HTTPS URL 을 만든다.
 - `build-fixtures` — 합성 시나리오로 앱 목 픽스처(`src/data/fixtures/*.json`)와 e2e 골든(`test/golden/snapshot.json`)을 다시 만든다. core 상수를 바꾸면 반드시 다시 실행한다.
 - `backtest` — `.cache` 의 수집 결과(또는 `--scenario <key>`)로 보고서 §5.2 리포트를 `docs/backtest/` 에 쓴다.
