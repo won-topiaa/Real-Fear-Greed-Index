@@ -32,17 +32,20 @@ export async function collectFg(ctx: Ctx, store: FileStore, expected: IsoDate): 
     const rangeError = validateCnn(parsed, ctx.nowUtcMs);
     if (rangeError) throw new Error(rangeError);
 
-    const own: FgPoint = { date: expected, value: parsed.current.score, observedAtUtc: fetchedAtUtc, source: 'own' };
+    // 현재값의 뉴욕 날짜가 기대 거래일과 다르면(장중 실행·CNN 갱신 지연) 그 값은 거래일 t 의 마감 값이 아니다.
+    // own 은 historical 보다 우선하고 첫 관측이 유지되므로, 이때 own 으로 남기면 t 의 값을 영구히 덮어쓴다 → 남기지 않는다.
+    let dateMismatch = false;
+    if (parsed.current.timestamp) {
+      const ts = Date.parse(parsed.current.timestamp);
+      dateMismatch = Number.isFinite(ts) && nyDateOf(ts) !== expected;
+    }
+    if (dateMismatch) flags.push('fg-date-mismatch');
+    const own: FgPoint[] = dateMismatch ? [] : [{ date: expected, value: parsed.current.score, observedAtUtc: fetchedAtUtc, source: 'own' }];
     const historical = normalizeCnnHistory(parsed);
-    const merged = mergeFgHistory(previous, [...historical, own]);
+    const merged = mergeFgHistory(previous, [...historical, ...own]);
     const issues = validateFgSeries(merged).filter((i) => i.fatal);
     if (issues.length > 0) throw new Error(`invalid: ${issues.map((i) => i.code).join(',')}`);
     await store.writeFgHistory(merged);
-
-    if (parsed.current.timestamp) {
-      const ts = Date.parse(parsed.current.timestamp);
-      if (Number.isFinite(ts) && nyDateOf(ts) !== expected) flags.push('fg-date-mismatch');
-    }
     return { history: merged, report: { ...base, status: 'ok', asOf: expected }, flags, fgSource: 'cnn', raw: res.text };
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'unknown';

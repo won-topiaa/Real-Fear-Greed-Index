@@ -56,6 +56,26 @@ test('timestamp 의 뉴욕 날짜가 기대 거래일과 다르면 fg-date-misma
   }
 });
 
+test('장중 실행(현재값이 다음 거래일 것)이면 own 을 남기지 않아 기대 거래일의 마감 값을 덮어쓰지 않는다', async () => {
+  // 2026-10-14 16:58Z 로컬 실행에서 실제로 난 사고: 10-14 장중 값 34.5 가 10-13 의 own 으로 박혀 마감 값 44.1 을 덮었다.
+  const dir = await mkdtemp(join(tmpdir(), 'rfg-fg-'));
+  try {
+    const store = new FileStore(dir);
+    const hist: FgPoint[] = [
+      { date: '2026-10-12', value: 46.3, source: 'cnn-historical' },
+      { date: '2026-10-13', value: 44.1, source: 'cnn-historical' },
+    ];
+    const f = fakeFetch([{ match: (u) => u.includes('cnn.io'), body: cnnJson(hist, { score: 34.5, timestamp: '2026-10-14T16:58:00+00:00' }) }]);
+    const r = await collectFg(ctx(f, '2026-10-14T16:58:34Z'), store, '2026-10-13');
+    assert.deepEqual(r.flags, ['fg-date-mismatch']);
+    assert.deepEqual(r.history.find((p) => p.date === '2026-10-13'), { date: '2026-10-13', value: 44.1, source: 'cnn-historical' });
+    assert.equal(r.history.some((p) => p.source === 'own'), false);
+    assert.equal((await store.readFgHistory()).some((p) => p.source === 'own'), false);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('CNN 실패 시 저장소 히스토리로 폴백: fg-stale, 없으면 fg-missing', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'rfg-fg-'));
   try {
