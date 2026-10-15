@@ -1,5 +1,5 @@
 /**
- * 로컬 개발용 정적 서버. 배포에는 쓰지 않는다(배포는 Cloudflare Workers 정적 자산).
+ * 로컬 개발용 정적 서버. 배포에는 쓰지 않는다(배포는 GitHub Pages).
  * 샌드박스 폰에서 보려면 `cloudflared tunnel --url http://localhost:8787` 로 HTTPS URL 을 만든다(DESIGN §3.7).
  */
 import { createServer, type Server } from 'node:http';
@@ -27,7 +27,7 @@ export function cacheControlFor(urlPath: string): string {
 export function startStaticServer(opts: { dir: string; port: number; log?: Logger }): Promise<Server> {
   const server = createServer(async (req, res) => {
     const rawPath = (req.url ?? '/').split('?')[0] ?? '/';
-    // 디렉터리 요청은 index.html 로(Workers 정적 자산의 기본 동작과 같게)
+    // 디렉터리 요청은 index.html 로(GitHub Pages 의 기본 동작과 같게)
     const urlPath = rawPath.endsWith('/') ? `${rawPath}index.html` : rawPath;
     const safe = normalize(urlPath).replace(/^(\.\.[/\\])+/, '');
     const filePath = join(opts.dir, safe);

@@ -166,14 +166,13 @@ cloudflared tunnel --url http://localhost:8787
 
 ---
 
-## 5. Cloudflare(Workers 정적 자산) + GitHub Actions 셋업 (한 번)
+## 5. GitHub Pages + GitHub Actions 셋업 (한 번)
 
-게시는 **Cloudflare Workers 정적 자산**이다(`proxy/wrangler.jsonc`, 코드 없이 `public/` 만 서빙, `_headers` 그대로 적용).
-Cloudflare Pages 는 Workers 로 통합되는 중이라 wrangler 4.13x 의 `pages project create` 가 Workers 로 넘겨져 실패한다(2026-10-15 실측). 변수 이름 `PAGES_*` 는 그대로 쓴다.
+게시는 **GitHub Pages**다(`https://won-topiaa.github.io/Real-Fear-Greed-Index/`). collect 워크플로가 `proxy/public`(수집 결과 + 웹 화면)을
+`actions/upload-pages-artifact` → `actions/deploy-pages` 로 올린다. (2026-10-15 하루 동안 쓴 Cloudflare Workers 는 계정 하위 도메인에 실명이 들어가 내렸다.)
 
-1. 첫 게시(이 맥, `wrangler login` 상태): `cd proxy && npm run collect && npm run build-web && npx wrangler deploy`. 출력의 `https://rfg-data.<계정>.workers.dev` 가 호스트다.
-   GitHub **Variables** `PAGES_PROJECT=rfg-data`, `PAGES_HOST=rfg-data.<계정>.workers.dev`.
-2. GitHub **Secrets**: `FRED_API_KEY`, `CLOUDFLARE_API_TOKEN`(대시보드 → My Profile → API Tokens → "Edit Cloudflare Workers" 템플릿, Account Resources 는 이 계정만), `CLOUDFLARE_ACCOUNT_ID`, `HEALTHCHECKS_PING_URL`.
+1. 저장소 Pages 를 Actions 빌드로 켠다: `gh api -X POST repos/<owner>/<repo>/pages -f build_type=workflow`. GitHub **Variables** `PAGES_HOST=<owner>.github.io/<repo>`(이전 게시본을 내려받는 데 쓴다).
+2. GitHub **Secrets**: `FRED_API_KEY`, `HEALTHCHECKS_PING_URL`(선택).
 3. GitHub **Variables**(선택): `CNN_USER_AGENT`.
 4. `.github/workflows/collect.yml` 을 **수동 실행(workflow_dispatch)** 해 `status-<run>` 아티팩트의 `status.json` 이 `ok` 인지 본다.
 5. GitHub 는 **공개 레포가 60일간 저장소 활동(커밋 등)이 없으면 스케줄 워크플로를 끈다**(워크플로 실행은 활동이 아니다). collect.yml 의 마지막 단계(keepalive)가 마지막 커밋이 50일을 넘으면 빈 커밋을 push 한다 — 수동 실행에서 `keepalive_days=0` 으로 시험할 수 있다. 추가로 healthchecks.io 체크(주기 1일, 유예 12시간)의 핑 URL 을 Secrets 에 넣으면 "잡이 아예 안 돈" 경우도 알림을 받는다(선택).
@@ -182,8 +181,10 @@ Cloudflare Pages 는 Workers 로 통합되는 중이라 wrangler 4.13x 의 `page
 Actions 러너 IP 가 CNN 봇 방어에 걸리면(`status.sources[cnn].error = http_403`), 수집기를 집 맥의 launchd 로 옮긴다:
 
 ```
-cd proxy && npm run collect && npm run build-web && npx wrangler deploy
+cd proxy && npm run collect && npm run build-web && npm run serve
 ```
+
+(로컬 확인용. 게시는 워크플로 수동 실행 `gh workflow run collect` 로 한다.)
 
 코드는 같고 실행 위치만 다르다.
 

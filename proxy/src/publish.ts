@@ -1,6 +1,6 @@
 /**
  * 게시. snapshot.json 은 parseSnapshot 자기검증을 통과한 경우에만 교체한다. status.json 은 항상 쓴다.
- * Cloudflare 캐시 헤더는 public/_headers 로 함께 게시한다(DESIGN §7.1). Workers 정적 자산도 같은 형식을 읽는다.
+ * 캐시 헤더는 public/_headers 로 함께 쓴다(DESIGN §7.1). 지금 게시처인 GitHub Pages 는 이 파일을 읽지 않는다 — Cloudflare 로 옮길 때 그대로 쓰인다.
  */
 import { join } from 'node:path';
 import { parseHistory } from '../../src/core/history';

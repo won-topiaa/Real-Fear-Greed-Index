@@ -3,7 +3,7 @@
 CNN 공포·탐욕 지수(심리)가 S&P 500 / 나스닥 100 의 실제 가격 훼손(낙폭·이격도·변동성)으로 얼마나 전이됐는지를
 하루 한 번 계산해 한 화면으로 보여준다. 산식은 `docs/DESIGN.md` §4. 원문 보고서의 모델 A(RFG)·모델 B(FRM)·4분면을 출발점으로,
 실제 하락·회복 국면을 더 정확히 보여주도록 1977–2026 백테스트로 기준값을 조정한 **엔진 v2**(1년 고점 낙폭·200일선 이격도·20일 변동성의 5년 백분위, 심리 0.6 / 가격 0.4, 3일 평활)를 쓴다 — 근거는 `research/README.md`.
-매수·매도 신호가 아니라 CNN 공포·탐욕 지수처럼 **지수**를 보여준다. 웹: https://rfg-data.yangjuwon240.workers.dev/
+매수·매도 신호가 아니라 CNN 공포·탐욕 지수처럼 **지수**를 보여준다. 웹: https://won-topiaa.github.io/Real-Fear-Greed-Index/
 앱인토스(토스 미니앱)에는 올리지 않는다(2026-10-15 결정).
 
 설계의 단일 진실은 **`docs/DESIGN.md`** 다. 코드와 다르면 문서를 먼저 고친다.
@@ -15,7 +15,7 @@ src/core     순수 TS 수식·분류·달력·스냅샷 계약·백테스트  (
 src/text     포맷·문구·홈 뷰모델 (순수 TS)               — 스토어 그림 스크립트가 그대로 import
 src/data     스냅샷 클라이언트(HTTP/목)·캐시·상태 훅·프레임워크 접근(platform.ts)
 src/ui       View 기반 컴포넌트, src/screens 화면, src/pages 라우트(createRoute)
-proxy/       수집·검증·계산·게시 잡(Node 22). GitHub Actions cron → 정적 JSON → Cloudflare Workers 정적 자산
+proxy/       수집·검증·계산·게시 잡(Node 22). GitHub Actions cron → 정적 JSON·웹 화면 → GitHub Pages
 scripts/     doctor · check-config · check-routes · check-pure-modules · predeploy · ensure-local-config
 research/    엔진 v2 백테스트(Python). 데이터는 받아서 쓰고 커밋하지 않는다
 web/         웹 화면(CNN 스타일). proxy 의 `npm run build-web` 이 src/core·src/text 와 함께 번들해 public/ 에 낸다

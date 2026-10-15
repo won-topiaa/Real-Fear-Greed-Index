@@ -1,7 +1,7 @@
 # proxy/ — RFG 수집·검증·계산·게시 잡
 
 이름은 교훈 문서·`.gitignore`·`check-config` 와 맞추기 위해 `proxy/` 를 유지한다. 실체는 **하루 한 번 도는 잡**이며,
-결과는 정적 JSON(`public/v1/snapshot.json`, `public/v1/status.json`)으로 Cloudflare Workers 정적 자산(`wrangler.jsonc`)에 게시한다. 항상 켜진 서버는 없다.
+결과는 정적 JSON(`public/v1/*.json`)과 웹 화면으로 GitHub Pages 에 게시한다(collect 워크플로). 항상 켜진 서버는 없다.
 
 ## 실행
 
@@ -41,7 +41,7 @@ node scripts/inspect.mjs --source yahoo --symbol SPX --save
 ## 비밀값
 
 `.env` 만(gitignore). 키 값은 채팅·스크린샷·로그에 넣지 않는다. 로그는 `api_key=` 뒤를 자동으로 가린다(`src/log.ts`, 테스트로 고정).
-GitHub Actions 에서는 `FRED_API_KEY`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `HEALTHCHECKS_PING_URL` 을 Secrets 에 둔다.
+GitHub Actions 에서는 `FRED_API_KEY`, `HEALTHCHECKS_PING_URL`(선택)을 Secrets 에 둔다. 게시는 GitHub Pages 라 Cloudflare 키는 필요 없다.
 
 ## 실패 모드
 

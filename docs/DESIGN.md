@@ -15,7 +15,7 @@
 | 결정 | 내용 |
 |---|---|
 | 계산 위치 | **파이프라인(`proxy/`, 스케줄 잡)에서 계산**하고 앱은 스냅샷 JSON을 검증해 **분류·포맷·표시만** 한다. 수식은 `src/core`(순수 TS)에 한 벌만 두고 파이프라인·앱·백테스트·스토어 그림 생성기가 같은 코드를 import 한다. |
-| 호스팅 | **GitHub Actions cron → 정적 JSON → Cloudflare Workers 정적 자산**(2026-10-15 변경: Pages 가 Workers 로 통합되는 중이라 `wrangler deploy` + `proxy/wrangler.jsonc`. 대안 GitHub Pages). 항상 켜진 서버 없음. 잡이 실패하면 어제 JSON이 그대로 서빙되는 "온순한 실패". |
+| 호스팅 | **GitHub Actions cron → 정적 JSON·웹 화면 → GitHub Pages**(`https://won-topiaa.github.io/Real-Fear-Greed-Index/`, `actions/deploy-pages`). 2026-10-15 하루 동안 Cloudflare Workers 정적 자산으로 게시했다가, 계정 `workers.dev` 하위 도메인에 실명이 들어가 GitHub Pages 로 옮겼다. 항상 켜진 서버 없음. 잡이 실패하면 어제 JSON이 그대로 서빙되는 "온순한 실패". |
 | 데이터 소스 | 심리: CNN Fear & Greed(비공식). 종가: FRED(공식, 키) → Stooq → Yahoo 순으로 **"기대 최신 거래일까지 있는 첫 소스"** 하나를 통째로 쓴다(한 창 한 소스). |
 | 롤링 백분위 | 창 W=1260(v2, 약 5년), **자기 포함, 평균순위, 분모 W−1**. 최대 100·최소 0·전부 동률 50. v2 는 낙폭·이격도·변동성을 **각각** 백분위로 바꿔 가중 평균한다. 최소 종가 1511개(스냅샷 히스토리 60일까지 1570개). |
 | 표시와 판정 | 화면에 보이는 값과 사분면·구간 판정은 **같은 반올림 값**을 쓴다(정수 점수, FRM 소수 2자리). "70으로 보이는데 패닉 투매가 아님" 같은 모순을 없앤다. |
@@ -69,7 +69,7 @@
 │   src/core/*  ← 같은 수식 모듈: computeRfgSeries → buildSnapshot                              │
 │   publish/    public/v1/snapshot.json (검증 통과 시에만 교체)  public/v1/status.json (항상)     │
 └──────────────────────────────┬─────────────────────────────────────────────────────────────┘
-                               │  wrangler deploy (Workers 정적 자산)       healthchecks 핑
+                               │  actions/deploy-pages (GitHub Pages)      healthchecks 핑
                                ▼
               https://<apiBaseUrl>/v1/snapshot.json   Cache-Control: max-age=600, s-w-r=86400
               https://<apiBaseUrl>/v1/status.json     https://<apiBaseUrl>/static/icon.png
@@ -193,7 +193,7 @@ CNN은 장중에도 값을 갱신하므로 "거래일 t의 FG_t"를 정의해야
 미니앱이 임의 도메인으로 fetch 할 수 있는지, 평문 HTTP가 허용되는지는 **[검증 필요]** 이며 이것이 실데이터 화면의 전제다. 순서를 못 박는다.
 
 1. 샌드박스 첫 실행은 **목 모드**(네트워크 불필요).
-2. 실데이터 첫 실험은 **HTTPS 공개 URL(Cloudflare, `rfg-data.<계정>.workers.dev`)** 로 한다. `http://<맥IP>:포트`는 ATS/평문 허용 여부가 불명이라 쓰지 않는다.
+2. 실데이터 첫 실험은 **HTTPS 공개 URL(GitHub Pages)** 로 한다. `http://<맥IP>:포트`는 ATS/평문 허용 여부가 불명이라 쓰지 않는다.
 3. 로컬 파이프라인 출력을 폰에서 보려면 `cloudflared tunnel --url http://localhost:8787`로 HTTPS 임시 URL을 만들어 `apiBaseUrl`에 넣는다.
 4. 여기서 막히면(도메인 화이트리스트 등) 앱인토스 콘솔의 네트워크 정책 항목을 확인한다.
 
@@ -671,7 +671,7 @@ proxy/
 | `GET /` | 웹 화면(`web/` → `index.html`·`app.js`·`style.css`, 2026-10-15). CNN 스타일 5구간 게이지·색 안내·과거 값·추이(1년·3년·5년·최대, '두 지수 함께 보기' 비교 모드: S&P 잉크·나스닥 보라 선, 차이 툴팁)·구성 요소. `src/core`·`src/text` 를 번들 | `max-age=300` |
 | `GET /static/icon.png` | 앱 아이콘 512×512 (`brand.icon` URL) | 길게 |
 
-캐시 헤더는 파이프라인이 `public/_headers`(Cloudflare `_headers` 형식 — Workers 정적 자산도 같은 형식을 읽는다)로 함께 게시한다. 실패한 실행도 `status.json` 과 `_headers` 는 게시된다(`snapshot.json` 은 검증 통과 시에만 바뀜).
+GitHub Pages 는 `_headers` 를 읽지 않아 캐시는 기본값(`max-age=600`), CORS 는 기본으로 `*` 다. 파이프라인은 Cloudflare 로 옮길 때를 위해 `public/_headers` 를 계속 쓴다. 실패한 실행도 `status.json` 과 `_headers` 는 게시된다(`snapshot.json` 은 검증 통과 시에만 바뀜).
 
 `status.json`:
 
@@ -710,7 +710,7 @@ collect:
 
 - 주말·휴장일: `expected`가 이전과 같으면 `unchanged: true`로 정상 종료.
 - 재시도: 01:00 UTC 두 번째 실행이 같은 로직을 돈다(FRED 반영 지연 대비).
-- Actions 러너 IP가 CNN 봇 방어에 걸리면 **[검증 필요]** 수집기는 `node proxy/dist/collect.js --out ./public` 한 줄이라 집 맥의 launchd에서 같은 명령을 돌리고 `wrangler deploy`로 올린다. 실행 위치만 바뀌고 코드는 같다.
+- Actions 러너 IP가 CNN 봇 방어에 걸리면 **[검증 필요]** 수집기는 `node proxy/dist/collect.js --out ./public` 한 줄이라 집 맥의 launchd에서 같은 명령을 돌리고 결과를 Pages 아티팩트로 올린다(워크플로 수동 실행이 가장 간단). 실행 위치만 바뀌고 코드는 같다.
 - GitHub는 공개 레포가 60일간 저장소 활동(커밋 등)이 없으면 스케줄 워크플로를 끈다. 워크플로 실행은 활동으로 치지 않으므로 collect.yml 마지막 단계(keepalive)가 마지막 커밋이 50일을 넘으면 빈 커밋을 push 한다(2026-10-15). 그래도 멈추는 경우는 healthchecks 데드맨 핑으로 잡는다.
 - 로그에 헤더·쿼리스트링을 찍지 않는다. `log.ts`가 `api_key=` 뒤를 마스킹한다(테스트).
 
@@ -723,7 +723,7 @@ collect:
 | 값 | 위치 | 비고 |
 |---|---|---|
 | `FRED_API_KEY` | `proxy/.env`(로컬), Actions Secrets(잡) | 없으면 FRED 어댑터 `disabled`, Stooq부터 |
-| `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | 〃 | Pages 배포 전용 최소 권한 |
+| `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | 〃 | 지금은 쓰지 않음(게시는 GitHub Pages). Cloudflare 로 옮길 때만 |
 | `HEALTHCHECKS_PING_URL` | 〃 | 유출돼도 핑만 가능 |
 | `apiBaseUrl` | `src/config.local.ts` | 비밀은 아니지만 목/실데이터 분기 근거라 같은 파일 |
 | `appToken` | `src/config.local.ts` | v1 미사용. 번들에 들어가므로 비밀 아님 |
@@ -862,6 +862,6 @@ collect:
 | M1 | `src/core` 전부 + `src/text` + 단위 테스트 + 손계산 골든 | §9.2 core/text 테스트 통과, `minClosesRequired()==311` | **완료** (테스트 116) |
 | M2 | `proxy/` 수집·검증·계산·게시 + 픽스처 e2e + 골든 스냅샷 + `inspect` 스크립트 + 로컬 `serve` + Actions 워크플로 | 픽스처로 e2e 통과, 계약 테스트 통과. **로컬에서 inspect 실행 후 [검증 필요] 해소** | **코드 완료** (테스트 27). inspect 실행은 로컬 작업 |
 | M3 | `src/data`, `src/ui`, `src/screens`, 홈·정보 화면, 목 모드, `check-routes`/`check-pure-modules`/`predeploy`, doctor 확장 | 상태표 10행 뷰모델·화면 테스트 통과, `ait build` 통과. **샌드박스에서 목 모드 홈·정보 렌더 확인은 로컬 작업** | **코드 완료** (테스트 156) |
-| M4 | Actions cron + Cloudflare(Workers 정적 자산) + healthchecks + 샌드박스 실데이터 | 3일 연속 `ok`, 앱이 실데이터 `ready`(§3.7 실험 통과) | 진행 중(2026-10-15: FRED 키·첫 게시 완료) |
+| M4 | Actions cron + GitHub Pages + healthchecks + 샌드박스 실데이터 | 3일 연속 `ok`, 앱이 실데이터 `ready`(§3.7 실험 통과) | 진행 중(2026-10-15: FRED 키·첫 게시 완료) |
 | M5 | 백테스트 리포트 1회, 파라미터 확정, 스토어 그림·텍스트 생성, `predeploy`, 아이콘 URL, 배포 | doctor 신규 항목 통과, 키 있는 기계에서 `ait deploy`, 스토어 등록 | 백테스트·파라미터 확정은 v2 로 완료. 앱인토스 배포는 하지 않기로 함(2026-10-15) |
 | v2 | 엔진 재설계(지수 품질 기준): `research/` 백테스트, `src/core` v2, 수집 own 날짜 버그 수정 | TS = Python 6자리 일치, 테스트 통과, doctor 통과 | **완료** (2026-10-15) |

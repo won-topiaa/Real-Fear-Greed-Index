@@ -9,7 +9,7 @@
 import type { LocalConfig } from './config';
 
 export const localConfig: LocalConfig = {
-  /** 정적 게시 베이스 URL. 예: 'https://rfg-data.<계정>.workers.dev' (끝에 슬래시 없음). HTTPS 만. */
+  /** 정적 게시 베이스 URL. 예: 'https://won-topiaa.github.io/Real-Fear-Greed-Index' (끝에 슬래시 없음). HTTPS 만. */
   apiBaseUrl: '',
   /** v1 미사용. 비워 둔다. */
   appToken: '',
