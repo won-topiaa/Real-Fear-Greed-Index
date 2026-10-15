@@ -1,6 +1,6 @@
 /**
  * FG_t 수집 (DESIGN §3.3). 거래일 t 의 FG 는 CNN 이력(historical)의 t 값이고, 매 실행 새로 받은 값으로 갱신한다
- * (CNN 이 다음 날 새벽 확정한 값으로 수렴). 이력에 t 가 아직 없을 때만 마감 후 관측한 현재값(own)으로 채운다.
+ * (CNN 은 그날 값을 다음 날까지 고친다 — 최신 값을 따라간다). 이력에 t 가 아직 없을 때만 마감 후 관측한 현재값(own)으로 채운다.
  */
 import { mergeFgHistory } from '../../../src/core/align';
 import { nyDateOf } from '../../../src/core/calendar';

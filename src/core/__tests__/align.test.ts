@@ -58,8 +58,8 @@ describe('mergeFgHistory — 날짜 유일, cnn-historical(새 값) > own > seed
     expect(merged[2]).toEqual({ date: '2026-09-11', value: 39, source: 'cnn-historical' });
   });
 
-  test('cnn-historical 끼리는 새로 받은 값(CNN 확정값)이 이긴다', () => {
-    // 2026-10-14 실측: 마감 뒤 잡이 본 값 32.42, CNN 이 다음 날 새벽 확정한 값 30.14
+  test('cnn-historical 끼리는 새로 받은 값(CNN 의 최신 값)이 이긴다', () => {
+    // 2026-10-14 실측: 마감 뒤 잡이 본 값 32.42, 다음 날 04:05 ET 의 CNN 값 30.14
     const merged = mergeFgHistory(
       [{ date: '2026-10-14', value: 32.42, source: 'cnn-historical' }],
       [{ date: '2026-10-14', value: 30.14, source: 'cnn-historical' }],

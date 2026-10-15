@@ -50,7 +50,7 @@ RFG_t = EMA3[ 0.6·FG_t + 0.4·(100 − P_t) ]                             FG = 
 | 종가 | FRED `SP500`(10년) · `NASDAQ100`(13년 조회) | Stooq · Yahoo 는 자동 수집이 막혀 있다 |
 
 - 지수 계산 시작: **나스닥 100 2020-07-15**, **S&P 500 2022-10-17** (FRED SP500 10년 + 5년 백분위 워밍업 한계)
-- CNN 은 그날 값을 다음 날 새벽(미국 동부)에 확정한다. 가장 최근 하루는 잠정치이고, 다음 수집에서 CNN 확정값으로 바뀐다.
+- CNN 은 그날 값을 다음 날까지 계속 고친다. 가장 최근 하루는 잠정치이고, 이후 수집에서 CNN 의 최신 값으로 바뀐다.
 - 게시 파일(GitHub Pages): `v1/snapshot.json`(오늘 값과 최근 60거래일) · `v1/status.json`(수집 상태) · `v1/history.json`(RFG · P 이력과 세부 지표). CNN 원값의 장기 이력은 공개하지 않는다.
 - 자동화: GitHub Actions `collect` 가 매일 22:30 UTC(07:30 KST), 01:00 UTC(재시도)에 수집 → 웹 빌드 → Pages 게시. 공개 레포 60일 비활성으로 예약 실행이 꺼지지 않게 마지막 커밋이 50일을 넘으면 빈 커밋을 남긴다.
 - 설정: Secrets `FRED_API_KEY`, Variables `PAGES_HOST`. 수동 게시는 `gh workflow run collect`.

@@ -147,9 +147,9 @@ CNN은 장중에도 값을 갱신하므로 "거래일 t의 FG_t"를 정의해야
 
 | 규칙 | 내용 |
 |---|---|
-| 정의 | **FG_t = CNN 이력(`fear_and_greed_historical`)의 거래일 t 값. 매 실행 새로 받은 값으로 바꾼다.** CNN 은 t 의 값을 다음 날 새벽(2026-10-15 실측 01:34–03:57 ET 사이)에 확정하므로, 마감 직후 실행이 본 값은 잠정치이고 다음 실행에서 확정값으로 바뀐다(2026-10-14 실측: 마감 뒤 32.42 → 확정 30.14. 이 규칙 전에는 첫 관측을 고정해 공개 60거래일 중 23일이 CNN 확정값과 최대 8.8 달랐다). 연구(`research/`)도 CNN 확정 이력으로 했다 |
+| 정의 | **FG_t = CNN 이력(`fear_and_greed_historical`)의 거래일 t 값. 매 실행 새로 받은 값으로 바꾼다.** CNN 은 t 의 값을 다음 날까지 계속 고친다(2026-10-15 실측: 10-14 값이 마감 뒤 20:42 ET 32.42 → 다음 날 04:05 ET 30.14 → 04:18 ET 29.91. 언제 멈추는지는 확인 필요). 그래서 마감 직후 실행이 본 값은 잠정치이고, 이후 실행이 CNN 의 최신 값으로 바꾼다(이 규칙 전에는 첫 관측을 고정해 공개 60거래일 중 23일이 CNN 과 최대 8.8 달랐다). 연구(`research/`)도 CNN 이력으로 했다 |
 | 기록 | `fg/history.json` 에 날짜당 한 값. CNN 이력에 t 가 아직 없을 때만 마감 후 관측한 현재값을 `{date: t, value, observedAtUtc, source: 'own'}` 으로 채우고, 이력이 생기면 그 값으로 바꾼다. **기대 거래일보다 뒤 날짜의 점은 받지 않는다** — CNN 은 UTC 자정이 지나면 다음 날짜 점을 미리 만들고 값은 직전 거래일 것이다 |
-| 이력 | `x`(epoch ms)를 ET 날짜로 바꾼다. `x % 86_400_000 === 0`이면 UTC 자정 기준 날짜, 아니면 ET 변환. 실응답 확인(2026-10-15): 과거 점은 UTC 자정, 마지막 점만 장중 시각. `graphdata/<YYYY-MM-DD>` 로 2020-07-15 이후 이력을 받을 수 있다(그 이전은 500). 수집기는 저장 이력이 2020-07-15 근처까지 없거나 최근이 비었으면 그날부터 전부, 아니면 최근 30일만 요청한다(`cnnRequestStart`) — 확정은 다음 날 새벽이라 30일 창으로 충분하다. `source: 'cnn-historical'` |
+| 이력 | `x`(epoch ms)를 ET 날짜로 바꾼다. `x % 86_400_000 === 0`이면 UTC 자정 기준 날짜, 아니면 ET 변환. 실응답 확인(2026-10-15): 과거 점은 UTC 자정, 마지막 점만 장중 시각. `graphdata/<YYYY-MM-DD>` 로 2020-07-15 이후 이력을 받을 수 있다(그 이전은 500). 수집기는 저장 이력이 2020-07-15 근처까지 없거나 최근이 비었으면 그날부터 전부, 아니면 최근 30일만 요청한다(`cnnRequestStart`) — 매 실행 최근 30일을 다시 받으므로 그 안의 수정은 모두 따라간다. `source: 'cnn-historical'` |
 | 우선순위 | `cnn-historical`(새로 받은 값이 이김) > `own`(기존 값 유지) > `seed`(외부 CSV, v1 미사용) |
 | 교차 확인 | 응답에 `timestamp`가 있으면 그 ET 날짜가 t와 다를 때 `fg-date-mismatch` 플래그를 달고 **그 현재값은 `own`으로 남기지 않는다**(t 값은 historical 로). 장중 실행이나 Actions 지연으로 다음 거래일의 장중 값이 t 의 값으로 들어가던 버그(2026-10-14 실측)를 막는다. 실응답에 `timestamp` 필드가 있음을 확인(2026-10-15) |
 | 절차 | **M2의 0번 작업** = 로컬에서 inspect 스크립트 1회 실행 → 실응답의 필드 형태만 남기고 히스토리를 30일로 잘라 픽스처로 커밋(라이선스 최소화) |
@@ -803,7 +803,7 @@ collect:
 |---|---|
 | `core/__tests__/series.test.ts` | 위 표 r/DD/DISP/RV(1e−6); 창 미달 null; `rollingPercentileRank`: 단조 증가 → 100, 감소 → 0, 전부 동률 → 50, 창 안 null → null, midrank/(W−1) 정확식, 표의 성분별 백분위 열 |
 | `rfg.test.ts` | 표의 P/RFG/FRM; `assertParams` 위반 throw; `minClosesRequired()==1511`, `minClosesForSnapshot()==1570` == `DATA_GATES`; `emaSkipNull`(결측 유지), EMA 적용 시 RFG 만 바뀜 |
-| `align.test.ts` | 토요일 관측 FG가 월요일 행에 붙고 `fgStaleDays=2`; 6일 공백 → null; 휴장일 FG는 행 없음; `mergeFgHistory` 우선순위·CNN 확정값으로 교체 |
+| `align.test.ts` | 토요일 관측 FG가 월요일 행에 붙고 `fgStaleDays=2`; 6일 공백 → null; 휴장일 FG는 행 없음; `mergeFgHistory` 우선순위·CNN 최신 값으로 교체 |
 | `classify.test.ts` | 사분면 경계 8개(±0.5 반올림 케이스 포함), NEUTRAL, rfgZone 20/80 경계, frmZone 0.5/1.5 경계(1.495/1.505), `Fear<10` → SUPPRESSED·risk=false, 결측 → UNKNOWN·시그널 false, BUY 두 조건 각각, RISK |
 | `round.test.ts` | `roundTo` 반올림 규칙, 음수, `roundForDisplay` null 전파 |
 | `validate.test.ts` | 역순, 중복, `.`값, 26% 갭, 12일 공백, 교차검증 0.1% |
@@ -829,7 +829,7 @@ collect:
 | 리스크 | 확률 | 영향 | 대응 |
 |---|---|---|---|
 | CNN 비공식 엔드포인트 차단·형태 변경 | 높음 | 심리축 정지 | 스키마·범위·날짜 검증 → 마지막 관측값(게이트 안) → fg-missing 상태. 자기 관측 누적으로 히스토리 의존 제거. 장기 중단 시 대안 심리축은 별도 지수로 v2 검토 |
-| CNN historical `x` 타임존 오해석 | 중 | FG 하루 밀림 | inspect 스크립트로 M2 0번에 확정, own 관측 우선 |
+| CNN historical `x` 타임존 오해석 | 중 | FG 하루 밀림 | inspect 스크립트로 M2 0번에 확정, CNN 이력 우선(§3.3) |
 | Actions 러너 IP가 봇 방어에 걸림 | 중 | 수집 실패 | 수집기 실행 위치 이동성(집 맥 launchd) |
 | FRED 전일 종가 반영 지연 | 중 | 스냅샷 하루 지연 | Stooq/Yahoo 폴백(한 창 한 소스), 01:00 UTC 재시도 |
 | 소스 간 종가 차이 | 낮음 | 백분위 순위 흔들림 | 한 창 한 소스, 교차검증 0.1% 경고 |

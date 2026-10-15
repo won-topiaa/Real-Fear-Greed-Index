@@ -36,7 +36,7 @@ test('CNN 이력에 기대 거래일이 없으면 마감 후 현재값을 own �
     ]);
     assert.equal((await store.readFgHistory()).length, 3);
 
-    // 다음 실행: CNN 이 09-11 을 확정했으면 own 대신 그 값을 쓴다
+    // 다음 실행: CNN 이력에 09-11 이 생기면 own 대신 그 값을 쓴다
     const f2 = fakeFetch([
       { match: (u) => u.includes('cnn.io'), body: cnnJson([...hist, { date: '2026-09-11', value: 39.5, source: 'cnn-historical' }], { score: 55 }) },
     ]);
@@ -47,8 +47,8 @@ test('CNN 이력에 기대 거래일이 없으면 마감 후 현재값을 own �
   }
 });
 
-test('CNN 이 다음 날 새벽 확정한 값으로 이전 실행의 잠정치를 바꾸고, 마감 전 날짜의 점은 받지 않는다', async () => {
-  // 2026-10-14 실측: 00:42Z(20:42 ET) 실행이 본 10-14 값 32.42 → CNN 확정 30.14.
+test('CNN 이 나중에 고친 값으로 이전 실행의 잠정치를 바꾸고, 마감 전 날짜의 점은 받지 않는다', async () => {
+  // 2026-10-14 실측: 00:42Z(20:42 ET) 실행이 본 10-14 값 32.42 → 08:05Z CNN 값 30.14.
   // 05:34Z 실행에는 UTC 자정이 지나 생긴 10-15 점(값은 10-14 것)이 있었다.
   const dir = await mkdtemp(join(tmpdir(), 'rfg-fg-'));
   try {

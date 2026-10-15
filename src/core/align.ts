@@ -40,8 +40,8 @@ const SOURCE_PRIORITY: Record<FgPoint['source'], number> = { 'cnn-historical': 3
 
 /**
  * 날짜 유일 병합(DESIGN §3.3). 같은 날짜면 소스 우선순위(cnn-historical > own > seed)가 높은 쪽.
- * cnn-historical 끼리는 새로 받은 값이 이긴다 — CNN 은 그날 값을 다음 날 새벽(ET)에 확정하므로 마감 직후 값은 잠정치다
- * (2026-10-14: 마감 뒤 32.4 → 확정 30.1). own·seed 끼리는 기존 값 유지. 결과는 날짜 오름차순.
+ * cnn-historical 끼리는 새로 받은 값이 이긴다 — CNN 은 그날 값을 다음 날까지 계속 고치므로 마감 직후 값은 잠정치다
+ * (10-14 값: 마감 뒤 32.4 → 다음 날 04:18 ET 29.9). own·seed 끼리는 기존 값 유지. 결과는 날짜 오름차순.
  */
 export function mergeFgHistory(existing: readonly FgPoint[], incoming: readonly FgPoint[]): FgPoint[] {
   const byDate = new Map<IsoDate, FgPoint>();
