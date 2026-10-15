@@ -1,76 +1,105 @@
-# 실질 공포·탐욕 지수 (Realized Fear & Greed Index) — 앱인토스 미니앱
+# 실질 공포·탐욕 지수 (Realized Fear & Greed Index)
 
-CNN 공포·탐욕 지수(심리)가 S&P 500 / 나스닥 100 의 실제 가격 훼손(낙폭·이격도·변동성)으로 얼마나 전이됐는지를
-하루 한 번 계산해 한 화면으로 보여준다. 산식은 `docs/DESIGN.md` §4. 원문 보고서의 모델 A(RFG)·모델 B(FRM)·4분면을 출발점으로,
-실제 하락·회복 국면을 더 정확히 보여주도록 1977–2026 백테스트로 기준값을 조정한 **엔진 v2**(1년 고점 낙폭·200일선 이격도·20일 변동성의 5년 백분위, 심리 0.6 / 가격 0.4, 3일 평활)를 쓴다 — 근거는 `research/README.md`.
-매수·매도 신호가 아니라 CNN 공포·탐욕 지수처럼 **지수**를 보여준다. 웹: https://won-topiaa.github.io/Real-Fear-Greed-Index/
-앱인토스(토스 미니앱)에는 올리지 않는다(2026-10-15 결정).
+CNN 공포·탐욕 지수(심리)에 S&P 500 · 나스닥 100 의 **실제 가격 훼손**(1년 고점 대비 낙폭 · 200일선 이격도 · 변동성)을 더해,
+시장이 실제로 얼마나 무서워하는지 0(극단적 공포) ~ 100(극단적 탐욕)으로 보여주는 지수다. 미국 장 마감 뒤 하루 한 번 갱신된다.
 
-설계의 단일 진실은 **`docs/DESIGN.md`** 다. 코드와 다르면 문서를 먼저 고친다.
+**웹: https://won-topiaa.github.io/Real-Fear-Greed-Index/**
+
+매수·매도 신호가 아니라 지수를 보여준다. 투자 조언이 아니다.
+
+설계의 단일 진실은 **`docs/DESIGN.md`** 다. 코드와 다르면 문서를 먼저 고친다. 엔진을 고른 근거는 **`research/README.md`**.
+
+## CNN 공포·탐욕 지수와 다른 점
+
+| | CNN | 이 지수 (RFG) |
+|---|---|---|
+| 실제 바닥은 공포·고점은 탐욕으로 가르는 정확도(AUC, 1 이 만점) | 0.88–0.92 | **0.99** |
+| VIX(옵션 시장 공포)와의 일치 | 0.44–0.49 | **0.68–0.69** |
+| 하루 평균 변화 | 3.2 | **2.0** |
+| 지수별 | S&P 500 하나 | **S&P 500 · 나스닥 100 따로** |
+
+2020-07 이후 실제 CNN 값으로 잰 값이다(`research/README.md` §6). 심리만 보는 CNN 과 달리 공포가 실제 가격에도 나타났는지를 함께 본다 —
+예: 2026-03 의 −7% 조정에서 CNN 8(극단적 공포) / RFG 21(공포), 2024-12 사상 최고가에서 CNN 52(중립) / RFG 67(탐욕).
+대신 심리 급반전에는 한 박자 늦고, 미래 수익률을 더 잘 맞히는 지표는 아니다.
+
+## 계산 (엔진 v2)
+
+```
+P_t   = 0.5·pct(−DD252)_t + 0.3·pct(−DISP200)_t + 0.2·pct(RV20)_t     각 pct 는 1260거래일(약 5년) 롤링 백분위
+RFG_t = EMA3[ 0.6·FG_t + 0.4·(100 − P_t) ]                             FG = CNN 공포·탐욕 지수, 3일 지수이동평균
+```
+
+- 구간(웹 게이지): 극단적 공포 0–24 · 공포 25–44 · 중립 45–55 · 탐욕 56–75 · 극단적 탐욕 76–100
+- 모든 숫자·문턱은 `src/core/constants.ts`, 문구는 `src/text/copy.ts` 한 곳에서만 나온다.
+- 1977–2026 나스닥 종합·닛케이·나스닥 100·S&P 500 에서 가격 구조 25,344개, 결합·평활 1,120개를 비교해 골랐다(`research/`).
+
+## 웹 화면
+
+- **홈**: 원호 게이지와 구간, 상태 띠(최신·지연·오래됨), 요약(심리 · 실질 가격 · 전일 대비), 두 지수 비교 카드, 자세히 보기 타일
+- **추이**: 과거 값(전일 · 1주 · 1개월 · 1년 전), 1년 · 3년 · 5년 · 최대 차트, '두 지수 함께 보기'(기본은 한 지수씩), 툴팁, 표 보기
+- **주요 사건**: 2020-07 이후 세계적 사건 14건(SVB 파산, 상호관세 충격 등) 때의 당일 · 1주 뒤 · 1개월 뒤 지수, 차트에 표시
+- **구성 요소**: 심리 · 실질 가격 · 낙폭 · 이격도 · 변동성을 같은 방향(0 공포 ~ 100 탐욕) 막대로
+- **계산 방법**: 산식 · 출처 · 면책
+- 라이트 · 다크, 휴대폰 너비 지원. 색은 빨강(공포) — 회색(중립) — 파랑(탐욕), 색 안내를 항상 같이 보여준다.
+
+## 데이터와 갱신
+
+| 데이터 | 출처 | 비고 |
+|---|---|---|
+| 심리 | CNN Fear & Greed (비공식 경로) | `graphdata/<날짜>` 로 2020-07-15 부터 받을 수 있다 |
+| 종가 | FRED `SP500`(10년) · `NASDAQ100`(13년 조회) | Stooq · Yahoo 는 자동 수집이 막혀 있다 |
+
+- 지수 계산 시작: **나스닥 100 2020-07-15**, **S&P 500 2022-10-17** (FRED SP500 10년 + 5년 백분위 워밍업 한계)
+- 게시 파일(GitHub Pages): `v1/snapshot.json`(오늘 값) · `v1/status.json`(수집 상태) · `v1/history.json`(RFG · P 이력과 세부 지표). CNN 원값의 이력은 공개하지 않는다.
+- 자동화: GitHub Actions `collect` 가 매일 22:30 UTC(07:30 KST), 01:00 UTC(재시도)에 수집 → 웹 빌드 → Pages 게시. 공개 레포 60일 비활성으로 예약 실행이 꺼지지 않게 마지막 커밋이 50일을 넘으면 빈 커밋을 남긴다.
+- 설정: Secrets `FRED_API_KEY`, Variables `PAGES_HOST`. 수동 게시는 `gh workflow run collect`.
 
 ## 구조
 
 ```
-src/core     순수 TS 수식·분류·달력·스냅샷 계약·백테스트  (react/react-native/node import 금지)
-src/text     포맷·문구·홈 뷰모델 (순수 TS)               — 스토어 그림 스크립트가 그대로 import
-src/data     스냅샷 클라이언트(HTTP/목)·캐시·상태 훅·프레임워크 접근(platform.ts)
-src/ui       View 기반 컴포넌트, src/screens 화면, src/pages 라우트(createRoute)
-proxy/       수집·검증·계산·게시 잡(Node 22). GitHub Actions cron → 정적 JSON·웹 화면 → GitHub Pages
+src/core     순수 TS 수식·분류·달력·스냅샷/이력 계약·백테스트   (react/react-native/node import 금지)
+src/text     포맷·문구·주요 사건 목록·홈 뷰모델 (순수 TS)
+web/         웹 화면(홈 + 상세 화면). src/core·src/text 를 esbuild 로 번들해 public/ 에 낸다
+proxy/       수집·검증·계산·게시 잡(Node 22). 웹 빌드(build-web), 로컬 서버(serve)
+research/    엔진 백테스트(Python). 데이터는 받아서 쓰고 커밋하지 않는다
+docs/        DESIGN.md(설계), runbook.md(운영 절차)
+src/data · src/ui · src/screens · src/pages   토스 미니앱(React Native, 앱인토스) 화면 — 코드는 유지하지만 배포하지 않는다
 scripts/     doctor · check-config · check-routes · check-pure-modules · predeploy · ensure-local-config
-research/    엔진 v2 백테스트(Python). 데이터는 받아서 쓰고 커밋하지 않는다
-web/         웹 화면(CNN 스타일). proxy 의 `npm run build-web` 이 src/core·src/text 와 함께 번들해 public/ 에 낸다
 ```
 
-## 시작
+## 로컬에서
 
 ```
 npm install
-npm run doctor
 npm run typecheck && npm test
-npm run dev
-```
 
-`npm install` 이 `src/config.local.ts` 를 예시로 만든다. `apiBaseUrl` 이 비어 있으면 **목 모드**(샘플 데이터 배지)로 돌아가므로
-서버 없이 샌드박스에서 바로 볼 수 있다. 시나리오는 `mockScenario` 로 바꾼다(normal · capitulation · bear_trap · complacency · euphoria · healthy_bull · delayed · stale · fg_missing).
-
-샌드박스: 같은 Wi-Fi, 샌드박스 앱에서 로컬 네트워크 허용 → 맥 IP 입력 → `intoss://real-fear-greed-index`. 막히면 dev 서버 창에서 `j` 로 DevTools 콘솔부터 본다.
-
-## 파이프라인
-
-```
-cd proxy && npm ci && cp .env.example .env
-node scripts/inspect.mjs --source cnn --save        # 실응답 형태 확인 (M2 0번 작업, 값은 출력 안 함)
-npm run collect                                     # public/v1/snapshot.json, status.json
-npm run serve                                       # 로컬 정적 서빙 (폰에서 보려면 cloudflared 로 HTTPS)
-npm run build-fixtures                              # core 상수를 바꾸면 반드시 재실행
+cd proxy && npm ci && cp .env.example .env     # .env 에 FRED_API_KEY
+npm run collect                                # public/v1/*.json
+npm run build-web                              # public/ 에 웹 화면(자산 주소에 내용 해시)
+npm run serve                                  # http://localhost:8787
 npm test
 ```
 
-자세한 내용은 `proxy/README.md`.
+core 상수를 바꾸면 `npm run build-fixtures`(proxy)로 픽스처·골든을 다시 만든다. 자세한 내용은 `proxy/README.md`, 운영 절차는 `docs/runbook.md`.
 
-## 검사 스크립트
+## 검사
 
 | 명령 | 하는 일 |
 |---|---|
-| `npm run doctor` | 앱인토스 새 앱 체크리스트(파일·버전·target·icon·권한·비밀값·상수 정합성·휴장일·골든 계약·라우트·순수 모듈·금지 단어) |
+| `npm run doctor` | 파일·버전·비밀값 추적 여부·상수 정합성·휴장일·골든 계약·라우트·순수 모듈·금지 단어 검사 |
 | `npm run check-config` | 비밀값을 **글자 수만** 출력(캡처해도 안전) |
-| `npm run predeploy` | 목 모드·원격 세션·아이콘 미기입 배포 차단(`npm run deploy` 전에 자동 실행) |
-
-## 배포(요약, 키 있는 로컬 기계에서)
-
-```
-npm run doctor && npm run typecheck && npm test
-npm run check-config
-npm run build
-npm run deploy
-```
-
-전체 절차와 스토어 등록 항목은 `docs/DESIGN.md` §8.
+| CI(`.github/workflows/ci.yml`) | 앱 타입 검사·테스트, 수집 코드 테스트, 웹 빌드 |
 
 ## 원칙
 
-- 사용자에게 보이는 숫자·문턱·문구는 `src/core/constants.ts` 와 `src/text/copy.ts` 한 곳에서만 나온다. JSX 에 숫자 리터럴을 쓰지 않는다.
-- 점수(순서)와 문턱(차단)을 섞지 않는다. 오래되거나 결측인 데이터로는 "이유를 말하지 않는다".
-- 화면과 판정은 같은 반올림 값을 쓴다.
-- 네트워크 실패를 샘플 데이터로 덮지 않는다. 목 모드는 `apiBaseUrl` 이 비어 있을 때만이다.
-- 투자 행동을 지시하는 문구는 쓰지 않는다. 면책은 홈과 정보 화면에 있다.
+- 사용자에게 보이는 숫자·문턱·문구는 `src/core/constants.ts` 와 `src/text/copy.ts` 한 곳에서만 나온다.
+- 화면과 판정은 같은 반올림 값을 쓴다. 오래되거나 결측인 데이터로는 값을 보여주지 않는다.
+- 네트워크 실패를 샘플 데이터로 덮지 않는다.
+- 투자 행동을 지시하는 문구는 쓰지 않는다(doctor 가 금지 단어를 검사한다). 면책은 화면에 있다.
+- 비밀값은 `proxy/.env`·`src/config.local.ts`·GitHub Secrets 에만 둔다. 원시 종가와 CNN 원값 이력은 게시하지 않는다.
+
+## 한계
+
+- 지수의 60% 가 CNN 값이라, CNN 수집이 끊기면 지수도 계산되지 않는다(가격 부분만 남는다).
+- 실제 CNN 으로 검증한 기간은 2020-07 이후다. 그 이전(2020-03 코로나 폭락 등)은 계산할 수 없다.
+- 백테스트의 정답지(1년 고점 대비 −10% 바닥 = 공포)는 하나의 정의다. 가격과 독립인 VIX 일치로 따로 확인했다.
