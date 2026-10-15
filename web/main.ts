@@ -25,7 +25,8 @@ const BAND_COLOR: Record<Band, string> = {
 const BAND_EDGES: number[] = [0, ...DISPLAY_BANDS.map((b) => Math.min(100, b.max + 0.5))];
 const STORAGE_KEY = 'rfg.index';
 const RANGE_KEY = 'rfg.range';
-const COMPARE_KEY = 'rfg.compare';
+/** 예전에 '두 지수 함께 보기'를 저장하던 키. 이제 저장하지 않고, 남아 있으면 지운다(기본은 한 지수씩 따로 보기). */
+const LEGACY_COMPARE_KEY = 'rfg.compare';
 /** 비교 모드의 선 색(배경 띠의 빨강·파랑과 겹치지 않게 잉크·보라). dataviz 검증: 정상·CVD ΔE ≥ 30, 대비 ≥ 3:1 */
 const SERIES_COLOR: Record<IndexSymbol, string> = { SPX: 'var(--s-spx)', NDX: 'var(--s-ndx)' };
 type RangeKey = keyof typeof CHART_RANGES | 'max';
@@ -91,17 +92,9 @@ function readRange(): RangeKey {
   return 'y1';
 }
 
-function readCompare(): boolean {
+function clearLegacyCompare(): void {
   try {
-    return localStorage.getItem(COMPARE_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function saveCompare(on: boolean): void {
-  try {
-    localStorage.setItem(COMPARE_KEY, on ? '1' : '0');
+    localStorage.removeItem(LEGACY_COMPARE_KEY);
   } catch {
     /* 무시 */
   }
@@ -148,7 +141,8 @@ async function load(): Promise<void> {
     const snap = parseSnapshot(snapRaw);
     if (!snap.ok) throw new Error(`snapshot ${snap.error.path}`);
     const hist = histRaw == null ? null : parseHistory(histRaw);
-    state = { snapshot: snap.value, history: hist && hist.ok ? hist.value : null, index: readIndex(), range: readRange(), compare: readCompare(), eventIdx: WORLD_EVENTS.length - 1, markEvent: false };
+    clearLegacyCompare();
+    state = { snapshot: snap.value, history: hist && hist.ok ? hist.value : null, index: readIndex(), range: readRange(), compare: false, eventIdx: WORLD_EVENTS.length - 1, markEvent: false };
     render();
   } catch {
     app.innerHTML = `<p class="state">${esc(WEB_COPY.error)}</p><button class="retry" type="button">${esc(WEB_COPY.retry)}</button>`;
@@ -373,14 +367,16 @@ function bindCommon(): void {
   );
   app.querySelector<HTMLButtonElement>('[data-compare]')?.addEventListener('click', () => {
     if (!state) return;
-    state.compare = !state.compare;
-    saveCompare(state.compare);
+    state.compare = !state.compare; // 이번 방문 동안만(저장하지 않는다)
     render();
+  });
+  // '추이' 타일은 기본 보기(선택한 지수 하나)로 연다. 겹쳐 보기는 '비교 보기'·'두 지수 함께 보기'로만 켠다.
+  app.querySelector<HTMLAnchorElement>('.tile-link[href="#/trend"]')?.addEventListener('click', () => {
+    if (state) state.compare = false;
   });
   app.querySelector<HTMLButtonElement>('[data-promo]')?.addEventListener('click', () => {
     if (!state) return;
     state.compare = true;
-    saveCompare(true);
     go('trend');
   });
   // 주요 사건: 고르면 차트에 표시할 사건이 바뀌고, '차트에서 보기'는 그 날짜가 들어가는 가장 짧은 기간으로 추이 화면을 연다
