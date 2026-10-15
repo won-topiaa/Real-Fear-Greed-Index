@@ -163,13 +163,146 @@ function seriesFor(s: State, sym: IndexSymbol = s.index): HistoryRow[] {
   return s.snapshot.markets[sym].history.map((r) => ({ date: r.date, rfg: r.rfg, p: r.p }));
 }
 
+type Page = 'home' | 'trend' | 'events' | 'components' | 'method';
+const PAGES: readonly Page[] = ['home', 'trend', 'events', 'components', 'method'];
+
+function currentPage(): Page {
+  const p = location.hash.replace(/^#\/?/, '') as Page;
+  return PAGES.includes(p) ? p : 'home';
+}
+
+function go(page: Page): void {
+  const hash = page === 'home' ? '#/' : `#/${page}`;
+  if (location.hash === hash) render();
+  else location.hash = hash; // hashchange → render
+}
+
+// ── 아이콘(선 아이콘, currentColor) ──────────────────────────────────────
+const ICON = {
+  logo: '<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="var(--ink)"/><path d="M8 20a8 8 0 0 1 16 0" fill="none" stroke="var(--b-f)" stroke-width="3.2" stroke-linecap="round"/><path d="M16 20l5-6" stroke="var(--surface)" stroke-width="2.4" stroke-linecap="round"/><circle cx="16" cy="20" r="2" fill="var(--surface)"/></svg>',
+  trend: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-6 4 4 8-9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 6h5v5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  events: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="15" r="2" fill="currentColor"/></svg>',
+  components: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
+  method: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="7.6" r="1.3" fill="currentColor"/></svg>',
+  compare: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16l4-5 3 3 5-6 4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  sentiment: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9" cy="10" r="1.2" fill="currentColor"/><circle cx="15" cy="10" r="1.2" fill="currentColor"/></svg>',
+  change: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17V7M7 7l-3 3M7 7l3 3M17 7v10M17 17l-3-3M17 17l3-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  back: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  chevron: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+} as const;
+
 function render(): void {
   if (!state) return;
-  const s = state;
+  const page = currentPage();
+  chartObserver?.disconnect();
+  chartObserver = null;
+  app.innerHTML = page === 'home' ? homeHtml(state) : detailHtml(state, page);
+  bindCommon();
+  if (page === 'trend') mountChart(state);
+}
+
+/** 오늘 값 표시 가능 여부와 상태 띠·배지 문구 */
+function freshnessOf(s: State): { blocked: boolean; level: 'ok' | 'warn' | 'bad'; text: string } {
   const market = s.snapshot.markets[s.index];
-  const latest = market.latest;
   const fresh = assessFreshness(s.snapshot, s.index, Date.now());
-  const blocked = fresh.level === 'stale' || latest.rfg == null;
+  const basis = formatBasisLine(market);
+  if (fresh.level === 'stale') return { blocked: true, level: 'bad', text: COPY.freshness('stale', fresh.tradingDaysBehind) };
+  if (market.latest.rfg == null) return { blocked: true, level: 'warn', text: COPY.fgMissing };
+  if (fresh.level === 'delayed') return { blocked: false, level: 'warn', text: `${basis} · ${COPY.freshness('delayed', fresh.tradingDaysBehind)}` };
+  return { blocked: false, level: 'ok', text: WEB_COPY.statusFresh(basis) };
+}
+
+function indexSwitchHtml(s: State): string {
+  return `<div class="switch" role="group" aria-label="지수 선택">
+      ${SYMBOLS.map((sym) => `<button type="button" data-index="${sym}" aria-pressed="${sym === s.index}">${esc(LABELS.index[sym])}</button>`).join('')}
+    </div>`;
+}
+
+// ── 홈 ───────────────────────────────────────────────────────────────────
+
+function homeHtml(s: State): string {
+  const latest = s.snapshot.markets[s.index].latest;
+  const f = freshnessOf(s);
+  const rows = seriesFor(s);
+  const prev = rows[rows.length - 2]?.rfg ?? null;
+  const change = latest.rfg != null && prev != null ? signedScore(latest.rfg, prev) : EMPTY;
+  const spx = s.snapshot.markets.SPX.latest.rfg;
+  const ndx = s.snapshot.markets.NDX.latest.rfg;
+  const stat = (icon: string, value: string, label: string, band: Band | null): string => `<div class="stat">
+        <div class="stat-top"><span class="stat-icon">${icon}</span><span class="stat-value">${esc(value)}</span></div>
+        <div class="stat-label">${band ? `<span class="swatch" style="--sw:${BAND_COLOR[band]}"></span>` : ''}${esc(label)}</div>
+      </div>`;
+  const tiles = (['trend', 'events', 'components', 'method'] as const)
+    .map(
+      (k) => `<a class="tile-link" href="#/${k}">
+        <span class="tile-icon tile-${k}">${ICON[k]}</span>
+        <span class="tile-title">${esc(WEB_COPY.pages[k].title)}</span>
+        <span class="tile-desc">${esc(WEB_COPY.pages[k].desc)}</span>
+      </a>`,
+    )
+    .join('');
+  return `
+    <header class="topbar">
+      <a class="brand" href="#/" aria-label="${esc(APP_TITLE)}"><span class="logo">${ICON.logo}</span><span class="brand-name">${esc(APP_TITLE)}</span></a>
+      ${indexSwitchHtml(s)}
+    </header>
+    <section class="hero" aria-label="${esc(LABELS.axis.rfg)}">
+      ${f.blocked ? `<p class="blocked">${esc(f.text)}</p>` : arcGaugeHtml(latest.rfg)}
+      <div class="status status-${f.level}"><span class="status-dot"></span>${esc(f.text)}</div>
+    </section>
+    <section class="card stats" aria-label="요약">
+      ${stat(ICON.sentiment, formatScore(latest.fg), WEB_COPY.stats.sentiment, latest.fg == null ? null : bandOf(latest.fg))}
+      ${stat(ICON.components, formatScore(latest.p == null ? null : 100 - latest.p), WEB_COPY.stats.price, latest.p == null ? null : bandOf(100 - latest.p))}
+      ${stat(ICON.change, change, WEB_COPY.stats.change, null)}
+    </section>
+    <h2 class="section-title">${esc(WEB_COPY.promoSection)}</h2>
+    <section class="card promo">
+      <div class="promo-body">
+        <span class="promo-icon">${ICON.compare}</span>
+        <div class="promo-title">${esc(WEB_COPY.promoTitle(formatScore(spx), formatScore(ndx)))}</div>
+        <p class="promo-desc">${esc(WEB_COPY.promoDesc)}</p>
+      </div>
+      <button type="button" class="pill" data-promo>${esc(WEB_COPY.promoCta)}</button>
+    </section>
+    <h2 class="section-title">${esc(WEB_COPY.exploreSection)}</h2>
+    <nav class="tiles" aria-label="${esc(WEB_COPY.exploreSection)}">${tiles}</nav>
+    <p class="fine">${esc(DISCLAIMER.short)} ${esc(WEB_COPY.updated(kstText(s.snapshot.generatedAtUtc)))}</p>`;
+}
+
+// ── 상세 화면 ─────────────────────────────────────────────────────────────
+
+function detailHtml(s: State, page: Exclude<Page, 'home'>): string {
+  const f = freshnessOf(s);
+  let body = '';
+  if (page === 'trend') body = `${f.blocked ? '' : compareHtml(seriesFor(s))}${trendCardHtml(s)}`;
+  else if (page === 'events') body = eventsHtml(s);
+  else if (page === 'components') body = componentsHtml(s);
+  else
+    body = `<section class="card method">
+        <h2>${esc(WEB_COPY.pages.method.title)}</h2>
+        <p>${esc(WEB_COPY.subtitle)}</p>
+        <p>${esc(WEB_COPY.method())}</p>
+        ${legendHtml('chart-legend')}
+      </section>
+      <section class="card method">
+        <p>${esc(WEB_COPY.sources)}</p>
+        <p>${esc(DISCLAIMER.full)}</p>
+        <p class="note">${esc(WEB_COPY.updated(kstText(s.snapshot.generatedAtUtc)))}</p>
+      </section>`;
+  // 주요 사건은 두 지수를 함께 보여주고, 계산 방법은 지수와 무관하다
+  const showSwitch = page === 'trend' || page === 'components';
+  return `
+    <nav class="detail-nav">
+      <a class="back" href="#/">${ICON.back}<span>${esc(WEB_COPY.back)}</span></a>
+      ${page === 'method' ? '' : `<a class="info" href="#/method" aria-label="${esc(WEB_COPY.infoLabel)}">${ICON.method}</a>`}
+    </nav>
+    <h1 class="page-title">${esc(WEB_COPY.pages[page].title)}</h1>
+    <div class="status status-${f.level}"><span class="status-dot"></span>${esc(f.text)}</div>
+    ${showSwitch ? `<div class="detail-switch">${indexSwitchHtml(s)}</div>` : ''}
+    ${body}`;
+}
+
+function trendCardHtml(s: State): string {
   const rows = seriesFor(s);
   const chartSyms: IndexSymbol[] = s.compare ? [...SYMBOLS] : [s.index];
   const chart = alignSeries(chartSyms.map((k) => ({ key: k, rows: seriesFor(s, k) })), s.range);
@@ -181,28 +314,7 @@ function render(): void {
       ? [WEB_COPY.dataStart(formatYmd(rows[0]?.date ?? ''))]
       : [];
   const chartTitle = s.compare ? `${LABELS.index.SPX} · ${LABELS.index.NDX}` : LABELS.index[s.index];
-
-  let badge = '';
-  if (fresh.level === 'delayed') badge = badgeHtml(COPY.freshness('delayed', fresh.tradingDaysBehind), '#fab219');
-  else if (fresh.level === 'stale') badge = badgeHtml(COPY.freshness('stale', fresh.tradingDaysBehind), '#d03b3b');
-  else if (latest.fg == null) badge = badgeHtml(COPY.fgMissing, '#fab219');
-
-  app.innerHTML = `
-    <header>
-      <div class="header">
-        <h1>${esc(APP_TITLE)}</h1>
-        <div class="switch" role="group" aria-label="지수 선택">
-          ${SYMBOLS.map((sym) => `<button type="button" data-index="${sym}" aria-pressed="${sym === s.index}">${esc(LABELS.index[sym])}</button>`).join('')}
-        </div>
-      </div>
-      <p class="subtitle">${esc(WEB_COPY.subtitle)}</p>
-      <div class="meta"><span>${esc(formatBasisLine(market))}</span>${badge}</div>
-    </header>
-    <section class="card" aria-label="${esc(LABELS.axis.rfg)}">
-      ${blocked ? `<p class="blocked">${esc(fresh.level === 'stale' ? COPY.staleBlocked : COPY.fgMissing)}</p>` : gaugeHtml(latest.rfg)}
-    </section>
-    ${blocked ? '' : compareHtml(rows)}
-    <section class="card" id="chart-card">
+  return `<section class="card" id="chart-card">
       <div class="card-head">
         <h2>${esc(WEB_COPY.chartTitle)} · ${esc(chartTitle)}</h2>
         <div class="controls">
@@ -217,70 +329,14 @@ function render(): void {
       ${startNotes.map((t) => `<p class="note">${esc(t)}</p>`).join('')}
       <div class="chart" id="chart"></div>
       ${tableHtml(chart.dates, chart.series)}
-    </section>
-    ${eventsHtml(s)}
-    ${componentsHtml(s)}
-    <footer class="footer">
-      <p>${esc(WEB_COPY.method())}</p>
-      <p>${esc(WEB_COPY.sources)}</p>
-      <p>${esc(DISCLAIMER.full)}</p>
-      <p>${esc(WEB_COPY.updated(kstText(s.snapshot.generatedAtUtc)))}</p>
-    </footer>`;
+    </section>`;
+}
 
-  app.querySelectorAll<HTMLButtonElement>('[data-index]').forEach((b) =>
-    b.addEventListener('click', () => {
-      const i = b.dataset.index;
-      if ((i === 'SPX' || i === 'NDX') && state) {
-        state.index = i;
-        saveIndex(i);
-        render();
-      }
-    }),
-  );
-
-  app.querySelectorAll<HTMLButtonElement>('[data-range]').forEach((b) =>
-    b.addEventListener('click', () => {
-      const r = b.dataset.range as RangeKey | undefined;
-      if (r && RANGE_KEYS.includes(r) && state) {
-        state.range = r;
-        saveRange(r);
-        render();
-      }
-    }),
-  );
-
-  app.querySelector<HTMLButtonElement>('[data-compare]')?.addEventListener('click', () => {
-    if (!state) return;
-    state.compare = !state.compare;
-    saveCompare(state.compare);
-    render();
-  });
-
-  // 주요 사건: 고르면 차트에 표시, '차트에서 보기'는 그 날짜가 들어가는 가장 짧은 기간으로 바꾸고 차트로 이동
-  const pickEvent = (i: number, focusId: string): void => {
-    if (!state) return;
-    state.eventIdx = Math.max(0, Math.min(WORLD_EVENTS.length - 1, i));
-    state.markEvent = true;
-    render();
-    document.getElementById(focusId)?.focus();
-  };
-  app.querySelector<HTMLSelectElement>('#event-select')?.addEventListener('change', (e) => pickEvent(Number((e.target as HTMLSelectElement).value), 'event-select'));
-  app.querySelector('#event-prev')?.addEventListener('click', () => pickEvent(s.eventIdx - 1, 'event-prev'));
-  app.querySelector('#event-next')?.addEventListener('click', () => pickEvent(s.eventIdx + 1, 'event-next'));
-  app.querySelector('#event-chart')?.addEventListener('click', () => {
-    if (!state) return;
-    const ev = WORLD_EVENTS[state.eventIdx];
-    if (!ev) return;
-    state.markEvent = true;
-    state.range = rangeCovering(ev.date, [...SYMBOLS].map((k) => seriesFor(state as State, k)));
-    saveRange(state.range);
-    render();
-    // 다시 그린 뒤에 이동해야 위치가 맞는다
-    requestAnimationFrame(() => document.getElementById('chart-card')?.scrollIntoView({ block: 'start' }));
-  });
-
-  const chartEl = document.getElementById('chart') as HTMLElement;
-  chartObserver?.disconnect();
+function mountChart(s: State): void {
+  const chartEl = document.getElementById('chart');
+  if (!chartEl) return;
+  const chartSyms: IndexSymbol[] = s.compare ? [...SYMBOLS] : [s.index];
+  const chart = alignSeries(chartSyms.map((k) => ({ key: k, rows: seriesFor(s, k) })), s.range);
   let lastWidth = 0;
   chartObserver = new ResizeObserver(() => {
     const w = Math.round(chartEl.clientWidth);
@@ -293,7 +349,63 @@ function render(): void {
   chartObserver.observe(chartEl);
 }
 
-/** '2022-10-21' → '2022년 10월 21일' */
+/** 모든 화면 공통 이벤트. 요소가 있는 화면에서만 붙는다. */
+function bindCommon(): void {
+  app.querySelectorAll<HTMLButtonElement>('[data-index]').forEach((b) =>
+    b.addEventListener('click', () => {
+      const i = b.dataset.index;
+      if ((i === 'SPX' || i === 'NDX') && state) {
+        state.index = i;
+        saveIndex(i);
+        render();
+      }
+    }),
+  );
+  app.querySelectorAll<HTMLButtonElement>('[data-range]').forEach((b) =>
+    b.addEventListener('click', () => {
+      const r = b.dataset.range as RangeKey | undefined;
+      if (r && RANGE_KEYS.includes(r) && state) {
+        state.range = r;
+        saveRange(r);
+        render();
+      }
+    }),
+  );
+  app.querySelector<HTMLButtonElement>('[data-compare]')?.addEventListener('click', () => {
+    if (!state) return;
+    state.compare = !state.compare;
+    saveCompare(state.compare);
+    render();
+  });
+  app.querySelector<HTMLButtonElement>('[data-promo]')?.addEventListener('click', () => {
+    if (!state) return;
+    state.compare = true;
+    saveCompare(true);
+    go('trend');
+  });
+  // 주요 사건: 고르면 차트에 표시할 사건이 바뀌고, '차트에서 보기'는 그 날짜가 들어가는 가장 짧은 기간으로 추이 화면을 연다
+  const pickEvent = (i: number, focusId: string): void => {
+    if (!state) return;
+    state.eventIdx = Math.max(0, Math.min(WORLD_EVENTS.length - 1, i));
+    state.markEvent = true;
+    render();
+    document.getElementById(focusId)?.focus();
+  };
+  const s = state;
+  if (!s) return;
+  app.querySelector<HTMLSelectElement>('#event-select')?.addEventListener('change', (e) => pickEvent(Number((e.target as HTMLSelectElement).value), 'event-select'));
+  app.querySelector('#event-prev')?.addEventListener('click', () => pickEvent(s.eventIdx - 1, 'event-prev'));
+  app.querySelector('#event-next')?.addEventListener('click', () => pickEvent(s.eventIdx + 1, 'event-next'));
+  app.querySelector('#event-chart')?.addEventListener('click', () => {
+    const ev = WORLD_EVENTS[s.eventIdx];
+    if (!ev) return;
+    s.markEvent = true;
+    s.range = rangeCovering(ev.date, [...SYMBOLS].map((k) => seriesFor(s, k)));
+    saveRange(s.range);
+    go('trend');
+  });
+}
+
 /** date 이상인 첫 행의 인덱스(없으면 −1). 행은 날짜 오름차순. */
 function rowAtOrAfter(rows: HistoryRow[], date: string): number {
   let lo = 0;
@@ -317,6 +429,7 @@ function rangeCovering(date: string, lists: HistoryRow[][]): RangeKey {
   return 'max';
 }
 
+/** '2022-10-21' → '2022년 10월 21일' */
 function formatYmd(d: string): string {
   const [y, m, day] = d.split('-').map(Number);
   return y && m && day ? `${y}년 ${m}월 ${day}일` : EMPTY;
@@ -325,10 +438,6 @@ function formatYmd(d: string): string {
 function kstText(utc: string): string {
   const k = formatKst(utc);
   return k.date === EMPTY ? EMPTY : `${formatTradingDate(k.date, 'short')} ${k.time}`;
-}
-
-function badgeHtml(text: string, dot: string): string {
-  return `<span class="badge" style="--dot:${dot}">${esc(text)}</span>`;
 }
 
 /** 색 안내: 각 색이 어느 구간·점수 범위인지 이름과 함께 적는다(색만으로 뜻을 전하지 않는다). */
@@ -348,47 +457,49 @@ function bandLabelHtml(b: Band): string {
 
 // ── 게이지 ────────────────────────────────────────────────────────────────
 
-function gaugeHtml(value: number | null): string {
+/** 굵은 원호 게이지(홈): 0~값까지 채우고 끝에 흰 손잡이. 색은 그 값의 구간색. */
+function arcGaugeHtml(value: number | null): string {
   const band = bandOf(value);
-  const W = 320;
+  const v = value == null ? 0 : Math.max(0, Math.min(100, value));
   const cx = 160;
-  const cy = 168;
+  const cy = 172;
   const r = 128;
-  const sw = 24;
-  const pt = (v: number, rad: number): [number, number] => {
-    const th = Math.PI * (1 - v / 100);
-    return [cx + rad * Math.cos(th), cy - rad * Math.sin(th)];
+  const sw = 34;
+  const pt = (val: number): [number, number] => {
+    const th = Math.PI * (1 - val / 100);
+    return [cx + r * Math.cos(th), cy - r * Math.sin(th)];
   };
   const f = (n: number): string => n.toFixed(2);
-  const gap = (2 / (Math.PI * r)) * 100; // 2px 표면 간격을 값 단위로
-  const arcs = DISPLAY_BANDS.map((b, i) => {
-    const v0 = (BAND_EDGES[i] ?? 0) + (i > 0 ? gap / 2 : 0);
-    const v1 = (BAND_EDGES[i + 1] ?? 100) - (i < DISPLAY_BANDS.length - 1 ? gap / 2 : 0);
-    const [x0, y0] = pt(v0, r);
-    const [x1, y1] = pt(v1, r);
-    return `<path d="M${f(x0)} ${f(y0)} A${r} ${r} 0 0 1 ${f(x1)} ${f(y1)}" stroke="${BAND_COLOR[b.key]}" stroke-width="${sw}" fill="none"/>`;
+  const [x0, y0] = pt(0);
+  const [x1, y1] = pt(100);
+  const [xv, yv] = pt(v);
+  const track = `<path d="M${f(x0)} ${f(y0)} A${r} ${r} 0 0 1 ${f(x1)} ${f(y1)}" class="arc-track" stroke-width="${sw}" fill="none" stroke-linecap="round"/>`;
+  // 채운 부분은 공포(빨강) → 중립(회색) → 탐욕(파랑) 그라데이션. 반원에서 x 는 값에 단조라, 각 구간 가운데 값의 x 에 그 구간색을 두면
+  // 손잡이 위치의 색이 그 값의 구간색과 맞는다.
+  const xn = (val: number): number => (1 - Math.cos((Math.PI * val) / 100)) / 2;
+  let lo = 0;
+  const stops = DISPLAY_BANDS.map((b) => {
+    const mid = (lo + b.max) / 2;
+    lo = b.max + 1;
+    return `<stop offset="${(xn(mid) * 100).toFixed(1)}%" style="stop-color:${BAND_COLOR[b.key]}"/>`;
   }).join('');
-  const ticks = [0, 25, 50, 75, 100]
-    .map((v) => {
-      const [x, y] = pt(v, r + sw / 2 + 12);
-      return `<text x="${f(x)}" y="${f(y + 4)}" text-anchor="middle" style="fill:var(--muted);font-size:11px">${v}</text>`;
-    })
-    .join('');
-  let needle = '';
-  if (value != null) {
-    const [tx, ty] = pt(Math.max(0, Math.min(100, value)), r - sw / 2 - 8);
-    needle = `<line x1="${cx}" y1="${cy}" x2="${f(tx)}" y2="${f(ty)}" stroke="var(--ink)" stroke-width="3" stroke-linecap="round"/>
-      <circle cx="${cx}" cy="${cy}" r="8" fill="var(--ink)" stroke="var(--surface)" stroke-width="3"/>`;
-  }
-  const ends = `<text x="${cx - r}" y="${cy + 22}" text-anchor="middle" style="fill:var(--ink-2);font-size:12px;font-weight:600">${esc(WEB_COPY.scaleEnds.fear)}</text>
-    <text x="${cx + r}" y="${cy + 22}" text-anchor="middle" style="fill:var(--ink-2);font-size:12px;font-weight:600">${esc(WEB_COPY.scaleEnds.greed)}</text>`;
+  const grad = `<linearGradient id="arc-grad" gradientUnits="userSpaceOnUse" x1="${cx - r}" y1="0" x2="${cx + r}" y2="0">${stops}</linearGradient>`;
+  const fill = value == null || v < 0.5 ? '' : `<path d="M${f(x0)} ${f(y0)} A${r} ${r} 0 0 1 ${f(xv)} ${f(yv)}" stroke="url(#arc-grad)" stroke-width="${sw}" fill="none" stroke-linecap="round"/>`;
+  const knob = value == null ? '' : `<circle cx="${f(xv)}" cy="${f(yv)}" r="${sw / 2 - 4}" class="arc-knob"/>`;
   const label = `${LABELS.axis.rfg} ${formatScore(value)}, ${bandText(band)}`;
-  return `<div class="gauge">
-      <svg viewBox="-14 0 ${W + 28} ${cy + 30}" role="img" aria-label="${esc(label)}">${arcs}${ticks}${needle}${ends}</svg>
-      <div class="hero">${esc(formatScore(value))}</div>
-      <div class="band-label">${bandLabelHtml(band)}</div>
-      ${legendHtml()}
-      <p class="legend-note">${esc(WEB_COPY.legendNote)}</p>
+  return `<div class="arc-gauge" style="--glow:${BAND_COLOR[band]}">
+      <div class="arc-wrap">
+        <svg viewBox="0 0 320 ${cy + sw / 2 + 4}" role="img" aria-label="${esc(label)}">
+          <defs>${grad}<filter id="knob-shadow" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.25"/></filter></defs>
+          ${track}${fill}${knob}
+        </svg>
+        <div class="arc-center">
+          <div class="arc-label">${esc(WEB_COPY.gaugeLabel)}</div>
+          <div class="arc-value">${esc(formatScore(value))}</div>
+          <div class="arc-band">${bandLabelHtml(band)}</div>
+        </div>
+      </div>
+      ${legendHtml('gauge-legend')}
     </div>`;
 }
 
@@ -701,5 +812,10 @@ function componentsHtml(s: State): string {
   ];
   return `<section class="card"><h2>${esc(WEB_COPY.componentsTitle)}</h2><p class="note">${esc(WEB_COPY.componentsNote)}</p><div class="rows">${rows.join('')}</div></section>`;
 }
+
+window.addEventListener('hashchange', () => {
+  render();
+  window.scrollTo(0, 0);
+});
 
 void load();
