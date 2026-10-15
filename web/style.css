@@ -11,13 +11,13 @@
   --axis: #c3c2b7;
   --border: rgba(11, 11, 11, 0.1);
   --focus: #2a78d6;
-  /* 5구간 발산형: 빨강(공포) — 회색(중립) — 파랑(탐욕) */
-  --b-ef: #e34948;
-  --b-f: #f19b98;
-  --b-n: #c3c2b7;
-  --b-g: #86b6ef;
-  --b-eg: #2a78d6;
-  --wash: 0.1;
+  /* 5구간 발산형: 빨강(공포) — 회색(중립) — 파랑(탐욕). 진할수록 극단. dataviz validate_palette 로 인접 구간 구분(정상 시야 ΔE ≥ 15) 확인 */
+  --b-ef: #b42020;
+  --b-f: #f2766b;
+  --b-n: #a19f97;
+  --b-g: #5b9af2;
+  --b-eg: #1d50b8;
+  --wash: 0.16;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
@@ -32,12 +32,12 @@
     --axis: #383835;
     --border: rgba(255, 255, 255, 0.1);
     --focus: #3987e5;
-    --b-ef: #e66767;
-    --b-f: #9b4544;
-    --b-n: #55544f;
-    --b-g: #1c5cab;
-    --b-eg: #3987e5;
-    --wash: 0.14;
+    --b-ef: #f25555;
+    --b-f: #a83228;
+    --b-n: #6e6d66;
+    --b-g: #2253a8;
+    --b-eg: #4f93f7;
+    --wash: 0.22;
   }
 }
 :root[data-theme='dark'] {
@@ -52,12 +52,12 @@
   --axis: #383835;
   --border: rgba(255, 255, 255, 0.1);
   --focus: #3987e5;
-  --b-ef: #e66767;
-  --b-f: #9b4544;
-  --b-n: #55544f;
-  --b-g: #1c5cab;
-  --b-eg: #3987e5;
-  --wash: 0.14;
+  --b-ef: #f25555;
+  --b-f: #a83228;
+  --b-n: #6e6d66;
+  --b-g: #2253a8;
+  --b-eg: #4f93f7;
+  --wash: 0.22;
 }
 
 * {
@@ -392,4 +392,35 @@ th {
   padding: 8px 16px;
   border-radius: 10px;
   cursor: pointer;
+}
+
+/* 색 안내(범례) — 색만으로 뜻을 전하지 않도록 이름·범위를 같이 쓴다 */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 14px;
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.legend .item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.legend .range {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.legend-note {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+  margin: 6px 0 0;
+}
+.chart-legend {
+  justify-content: flex-start;
+  margin: 4px 0 10px;
 }

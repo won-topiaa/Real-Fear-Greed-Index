@@ -119,6 +119,7 @@ function render(): void {
     ${blocked ? '' : compareHtml(rows)}
     <section class="card">
       <h2>${esc(WEB_COPY.chartTitle)} · ${esc(LABELS.index[s.index])}</h2>
+      ${legendHtml('chart-legend')}
       <div class="chart" id="chart"></div>
       ${tableHtml(rows)}
     </section>
@@ -162,6 +163,17 @@ function kstText(utc: string): string {
 
 function badgeHtml(text: string, dot: string): string {
   return `<span class="badge" style="--dot:${dot}">${esc(text)}</span>`;
+}
+
+/** 색 안내: 각 색이 어느 구간·점수 범위인지 이름과 함께 적는다(색만으로 뜻을 전하지 않는다). */
+function legendHtml(extraClass = ''): string {
+  let lo = 0;
+  const items = DISPLAY_BANDS.map((b) => {
+    const range = `${lo}–${b.max}`;
+    lo = b.max + 1;
+    return `<span class="item" role="listitem">${bandLabelHtml(b.key)}<span class="range">${range}</span></span>`;
+  }).join('');
+  return `<div class="legend ${extraClass}" role="list" aria-label="${esc(WEB_COPY.legendLabel)}">${items}</div>`;
 }
 
 function bandLabelHtml(b: Band): string {
@@ -209,6 +221,8 @@ function gaugeHtml(value: number | null): string {
       <svg viewBox="-14 0 ${W + 28} ${cy + 30}" role="img" aria-label="${esc(label)}">${arcs}${ticks}${needle}${ends}</svg>
       <div class="hero">${esc(formatScore(value))}</div>
       <div class="band-label">${bandLabelHtml(band)}</div>
+      ${legendHtml()}
+      <p class="legend-note">${esc(WEB_COPY.legendNote)}</p>
     </div>`;
 }
 

@@ -61,6 +61,8 @@ export const LABELS: {
 export const WEB_COPY = {
   subtitle: 'CNN 공포·탐욕 지수(심리)에 S&P 500·나스닥 100의 실제 가격 훼손을 더해, 시장이 실제로 얼마나 무서워하는지 0~100으로 보여줘요.',
   scaleEnds: { fear: '공포', greed: '탐욕' },
+  legendLabel: '색 안내',
+  legendNote: '빨강은 공포, 회색은 중립, 파랑은 탐욕이에요. 게이지 양 끝으로 갈수록 극단이에요.',
   compareTitle: '과거 값',
   compare: { prev: '전일', week: '1주 전', month: '1개월 전', year: '1년 전' },
   chartTitle: '1년 추이',
