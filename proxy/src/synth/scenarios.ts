@@ -14,7 +14,8 @@ export const SCENARIO_KEYS: readonly ScenarioKey[] = ['normal', 'capitulation', 
 /** 시나리오의 마지막 거래일(고정). 잡 시각은 그 다음날 22:30Z 로 둔다. */
 export const SCENARIO_CLOSE_DATE: IsoDate = '2026-09-11';
 export const SCENARIO_NOW_UTC = '2026-09-11T22:30:00.000Z';
-const CLOSES_COUNT = 420;
+/** 스냅샷 히스토리까지 채우는 최소 종가 + 여유 40 거래일 */
+const CLOSES_COUNT = DATA_GATES.MIN_CLOSES_FOR_SNAPSHOT + 40;
 const FG_DAYS = 150;
 
 export interface Scenario {

@@ -1,34 +1,36 @@
 /**
  * 모든 숫자의 유일한 출처.
- * - RFG_PARAMS  : 계산 파라미터(보고서 §2 권장값). 하나 바꾸면 파이프라인·앱·백테스트·스토어 그림이 함께 바뀐다.
+ * - RFG_PARAMS  : 계산 파라미터(v2 — 지수 품질 백테스트로 정함, DESIGN §4.6). 하나 바꾸면 파이프라인·앱·백테스트·스토어 그림이 함께 바뀐다.
  * - THRESHOLDS  : 보고서 §3·§4·§5.1 문턱 그대로. 점수가 아니라 "이름을 붙이거나 막는" 경계.
  * - DATA_GATES  : 보고서에 없는 운영 결정. 이 조건을 못 넘으면 값을 깎지 않고 "말하지 않는다".
  * - DISPLAY_DIGITS : 표시 정밀도. 판정도 같은 정밀도로 반올림한 값을 쓴다(DESIGN §4.3).
  */
 
 export const RFG_PARAMS = {
-  /** N — 고점 대비 낙폭 창(거래일) */
-  DD_WINDOW_N: 60,
-  /** M — 단순이동평균 창(거래일) */
-  SMA_WINDOW_M: 50,
+  /** N — 고점 대비 낙폭 창(거래일, 1년 고점). v1 60 */
+  DD_WINDOW_N: 252,
+  /** M — 단순이동평균 창(거래일, 200일선). v1 50 */
+  SMA_WINDOW_M: 200,
   /** K — 실현 변동성 창(수익률 개수) */
   RV_WINDOW_K: 20,
-  /** √252 연율화 상수. 창 W 와 우연히 같은 숫자지만 다른 상수다. */
+  /** √252 연율화 상수. 창 W 와 다른 상수다. */
   ANNUALIZATION_DAYS: 252,
-  /** W — 백분위 롤링 창(거래일) */
-  PERCENTILE_WINDOW_W: 252,
-  /** α — Composite_Damage 의 (−DD) 가중치 */
+  /** W — 백분위 롤링 창(거래일, 약 5년). v1 252 */
+  PERCENTILE_WINDOW_W: 1260,
+  /** α — P 의 낙폭 백분위 가중치 */
   ALPHA_DD: 0.5,
-  /** β — Composite_Damage 의 (−DISP) 가중치 */
+  /** β — P 의 이격도 백분위 가중치 */
   BETA_DISP: 0.3,
-  /** γ — Composite_Damage 의 RV 가중치 */
+  /** γ — P 의 변동성 백분위 가중치 */
   GAMMA_RV: 0.2,
-  /** w1 — RFG 의 심리(FG) 가중치 */
-  W1_SENTIMENT: 0.4,
-  /** w2 — RFG 의 실질 가격(100 − P) 가중치 */
-  W2_PRICE: 0.6,
+  /** w1 — RFG 의 심리(FG) 가중치. v1 0.4 */
+  W1_SENTIMENT: 0.6,
+  /** w2 — RFG 의 실질 가격(100 − P) 가중치. v1 0.6 */
+  W2_PRICE: 0.4,
   /** ε — FRM 분모 */
   EPSILON: 1e-5,
+  /** RFG 표시값의 지수이동평균 기간(거래일). 1 이면 평활하지 않는다. α = 2 / (span + 1) */
+  RFG_EMA_SPAN: 3,
 } as const;
 
 export type RfgParams = { -readonly [K in keyof typeof RFG_PARAMS]: number };
@@ -70,9 +72,9 @@ export const DATA_GATES = {
   /** 보고서 외: 스냅샷 히스토리 길이(거래일) */
   HISTORY_DAYS: 60,
   /** = minClosesRequired(RFG_PARAMS). 테스트가 일치를 검사한다. */
-  MIN_CLOSES: 311,
+  MIN_CLOSES: 1511,
   /** = MIN_CLOSES + HISTORY_DAYS − 1. 테스트가 일치를 검사한다. */
-  MIN_CLOSES_FOR_SNAPSHOT: 370,
+  MIN_CLOSES_FOR_SNAPSHOT: 1570,
   /** 보고서 외: 스냅샷이 이보다 오래되면 앱이 기기 시각으로 기대 거래일을 다시 계산한다 */
   SNAPSHOT_SELF_CLOCK_AFTER_HOURS: 48,
 } as const;
@@ -102,6 +104,7 @@ export function assertParams(p: RfgParams): void {
   }
   if (!(p.ANNUALIZATION_DAYS > 0)) fail('ANNUALIZATION_DAYS must be > 0');
   if (!(p.EPSILON > 0)) fail('EPSILON must be > 0');
+  if (!Number.isInteger(p.RFG_EMA_SPAN) || p.RFG_EMA_SPAN < 1) fail('RFG_EMA_SPAN must be an integer >= 1');
 }
 
 /** P_t 가 처음 정의되기까지 필요한 최소 종가 개수: max(N, M, K+1) + W − 1 (DESIGN §4.2) */

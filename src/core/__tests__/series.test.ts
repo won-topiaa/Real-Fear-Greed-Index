@@ -72,8 +72,11 @@ describe('rollingPercentileRank — DESIGN §4.1 확정 정의', () => {
     expect(rollingPercentileRank([1, 3, 2, 2.5], 4)[3]).toBeCloseTo((2 / 3) * 100, 10);
   });
 
-  test('픽스처 P 열과 일치', () => {
-    expectSeries(rollingPercentileRank(EXPECTED.composite, TINY_PARAMS.PERCENTILE_WINDOW_W), EXPECTED.p, 3);
+  test('픽스처의 성분별 백분위 열과 일치 (−DD, −DISP, RV)', () => {
+    const neg = (xs: readonly (number | null)[]) => xs.map((x) => (x == null ? null : -x));
+    expectSeries(rollingPercentileRank(neg(EXPECTED.dd), TINY_PARAMS.PERCENTILE_WINDOW_W), EXPECTED.pdd, 3);
+    expectSeries(rollingPercentileRank(neg(EXPECTED.disp), TINY_PARAMS.PERCENTILE_WINDOW_W), EXPECTED.pdisp, 3);
+    expectSeries(rollingPercentileRank(EXPECTED.rv, TINY_PARAMS.PERCENTILE_WINDOW_W), EXPECTED.prv, 3);
   });
 
   test('W < 2 면 전부 null', () => {

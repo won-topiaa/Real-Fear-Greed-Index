@@ -28,3 +28,8 @@ proxy/.cache/
 
 # 파이프라인 산출물(게시는 Cloudflare Pages 로)
 proxy/public/
+research/.venv/
+research/data/
+research/out/*.csv
+research/__pycache__/
+!research/out/index_quality_top.csv

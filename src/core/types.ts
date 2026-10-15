@@ -29,7 +29,7 @@ export interface DamageRow {
   disp: number | null;
   /** RV_t (연율화) */
   rv: number | null;
-  /** Composite_Damage_t */
+  /** Composite_Damage_t — v2: 성분별 백분위의 가중 평균(0~100) = P_t */
   composite: number | null;
   /** P_t, 0~100 */
   p: number | null;
@@ -44,7 +44,7 @@ export interface RfgRow extends DamageRow {
   fgStaleDays: number | null;
   /** Fear_t = 100 − FG_t */
   fear: number | null;
-  /** RFG_t */
+  /** RFG_t — 표시값(RFG_EMA_SPAN 지수이동평균) */
   rfg: number | null;
   /** FRM_t (캡하지 않은 원시값) */
   frm: number | null;

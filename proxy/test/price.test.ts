@@ -5,10 +5,13 @@ import { collectingLogger } from '../src/log';
 import { selectPriceSeries } from '../src/sources/price';
 import { fakeFetch, fredJson, stooqCsv, synthCloses, toPricePoints, tradingDatesEndingAt, yahooJson } from '../src/synth';
 import type { Ctx } from '../src/types';
+import { DATA_GATES } from '../../src/core/constants';
 
 const EXPECTED = '2026-09-11';
-const dates = tradingDatesEndingAt(EXPECTED, 400);
-const closes = synthCloses(400, { seed: 1, start: 5000, driftPerDay: 0.0002, volPerDay: 0.008 });
+/** 가격 검증의 최소 길이(MIN_CLOSES)를 넘기는 길이 */
+const COUNT = DATA_GATES.MIN_CLOSES_FOR_SNAPSHOT + 25;
+const dates = tradingDatesEndingAt(EXPECTED, COUNT);
+const closes = synthCloses(COUNT, { seed: 1, start: 5000, driftPerDay: 0.0002, volPerDay: 0.008 });
 const full = toPricePoints(dates, closes);
 const lagging = full.slice(0, -1); // 전일까지만
 
@@ -28,7 +31,7 @@ test('기대 거래일까지 있는 첫 소스를 통째로 고른다: FRED 지�
   );
   const sel = await selectPriceSeries(ctx(f), 'SPX', EXPECTED);
   assert.equal(sel.chosen?.source, 'stooq');
-  assert.equal(sel.chosen?.series.length, 400);
+  assert.equal(sel.chosen?.series.length, COUNT);
   assert.deepEqual(sel.reports.map((r) => [r.id, r.status]), [['fred', 'date_lag'], ['stooq', 'ok'], ['yahoo', 'ok']]);
   assert.equal(sel.reports[0]?.asOf, '2026-09-10');
   assert.equal(sel.crossCheck.length, 0);

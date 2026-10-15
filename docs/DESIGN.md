@@ -17,11 +17,12 @@
 | 계산 위치 | **파이프라인(`proxy/`, 스케줄 잡)에서 계산**하고 앱은 스냅샷 JSON을 검증해 **분류·포맷·표시만** 한다. 수식은 `src/core`(순수 TS)에 한 벌만 두고 파이프라인·앱·백테스트·스토어 그림 생성기가 같은 코드를 import 한다. |
 | 호스팅 | **GitHub Actions cron → 정적 JSON → Cloudflare Pages**(대안 GitHub Pages). 항상 켜진 서버 없음. 잡이 실패하면 어제 JSON이 그대로 서빙되는 "온순한 실패". |
 | 데이터 소스 | 심리: CNN Fear & Greed(비공식). 종가: FRED(공식, 키) → Stooq → Yahoo 순으로 **"기대 최신 거래일까지 있는 첫 소스"** 하나를 통째로 쓴다(한 창 한 소스). |
-| 롤링 백분위 | 창 W=252, **자기 포함, 평균순위, 분모 W−1**. 최대 100·최소 0·전부 동률 50. 최소 종가 311개(스냅샷 히스토리 60일까지 370개). |
+| 롤링 백분위 | 창 W=1260(v2, 약 5년), **자기 포함, 평균순위, 분모 W−1**. 최대 100·최소 0·전부 동률 50. v2 는 낙폭·이격도·변동성을 **각각** 백분위로 바꿔 가중 평균한다. 최소 종가 1511개(스냅샷 히스토리 60일까지 1570개). |
 | 표시와 판정 | 화면에 보이는 값과 사분면·구간 판정은 **같은 반올림 값**을 쓴다(정수 점수, FRM 소수 2자리). "70으로 보이는데 패닉 투매가 아님" 같은 모순을 없앤다. |
 | 신선도 | 벽시계가 아니라 **미국 거래일 차이**로 판정. 0일 fresh, 1~3일 delayed(배지만), 3일 초과 stale(RFG·사분면·FRM 표시 차단). |
 | 상수 | `src/core/constants.ts` 한 파일. `RFG_PARAMS`(계산), `THRESHOLDS`(보고서 문턱 그대로), `DATA_GATES`(보고서에 없는 운영 결정, 각 항목에 "보고서 외" 표시). 점수(순서)와 문턱(차단)을 섞지 않는다. |
-| 화면 v1 | `/`(홈), `/about`(정보·면책), `/_404`(필수). 시그널·매매 행동 문구는 화면에 내지 않는다. |
+| 화면 | `/`(홈), `/about`(정보·면책), `/_404`(필수). **지수를 보여주는 화면**이다 — 시그널·매매 행동 문구는 화면에 내지 않는다(저장소 소유자 결정 2026-10-15: 앱인토스에는 올리지 않지만 신호가 아니라 지수를 원함). |
+| 엔진 v2 | 2026-10-15 지수 품질 백테스트(`research/README.md`)로 변경: P = 0.5·pct(1년 고점 대비 낙폭) + 0.3·pct(200일선 이격도) + 0.2·pct(20일 변동성), 각 5년 백분위. RFG = 0.6·FG + 0.4·(100 − P) 를 3일 EMA 로 다듬는다. 근거는 §4.6. |
 | 비밀값 | `proxy/.env`, `src/config.local.ts`, Actions Secrets 에만. `predeploy` 훅이 목 모드·원격 세션 배포를 차단한다. |
 
 ---
@@ -35,7 +36,7 @@
 | 영역 | 내용 |
 |---|---|
 | 지수 | S&P 500(SPX), 나스닥 100(NDX) 두 기준 지수. 홈 기본은 SPX, 토글로 전환 |
-| 계산 | 보고서 §2~§4 전부: Fear, DD, DISP, RV, Composite, P(롤링 백분위), RFG(모델 A), FRM(모델 B), 사분면. §5.1 시그널은 **계산만**(백테스트용) |
+| 계산 | 보고서 §2~§4 전부: Fear, DD, DISP, RV, Composite, P(롤링 백분위), RFG(모델 A), FRM(모델 B), 사분면. §5.1 시그널은 **계산만**(백테스트용, 화면 미노출) |
 | 홈 화면 | 오늘의 RFG 값과 구간, 심리(Fear) vs 실질(P) 사분면, FRM 해석 문장(측정값 보간), DD/DISP/RV 요약, 기준일 문구, 신선도·샘플 배지, 면책 한 줄, 60거래일 RFG 스파크라인 |
 | 정보 화면 | 무엇을 재는가, 계산 요약(상수 보간), 임계값 표, 출처(비공식 명시), 갱신 주기, 면책 전문, 앱 정보 |
 | 파이프라인 | 수집 → 검증 → 계산 → 원자적 게시 → `status.json`. 픽스처로 end-to-end 테스트 |
@@ -88,7 +89,7 @@
 
 | 기준 | 앱에서 계산 | **파이프라인에서 계산(채택)** |
 |---|---|---|
-| 입력 크기 | P 하나에 종가 311개, 스파크라인까지 370개를 폰이 매번 받음 | 폰은 결과 스냅샷(수 KB)만 받음 |
+| 입력 크기 | P 하나에 종가 1511개, 스파크라인까지 1570개를 폰이 매번 받음 | 폰은 결과 스냅샷(수 KB)만 받음 |
 | 히스토리 축적 | 폰별 저장은 히스토리가 되지 않음 | FG 관측값을 매일 누적해 CNN 1년 제약을 벗어남 |
 | 시간대 | Hermes `Intl` 지원 범위 불확실 | ET→UTC 변환을 잡에서 끝내고 앱은 UTC+9 산술만 |
 | 동일 숫자 | 앱 버전마다 다를 수 있음 | 모든 사용자·스토어 그림이 같은 스냅샷 |
@@ -148,9 +149,9 @@ CNN은 장중에도 값을 갱신하므로 "거래일 t의 FG_t"를 정의해야
 |---|---|
 | 정의 | **FG_t = 거래일 t의 미국 정규장 마감(16:00 ET) 이후 잡이 처음 관측한 CNN 현재값.** 잡은 22:30 UTC(EDT 18:30 / EST 17:30)에 돈다 |
 | 기록 | `fg/history.json`에 `{date: t, value, observedAtUtc, source: 'own'}` append. **한 날짜에 한 값, 첫 관측을 유지**(불변). 같은 날짜의 다른 값이 나중에 보이면 `revision` 경고만 |
-| 백필 | 첫 실행과 결측 보충에만 `fear_and_greed_historical`을 쓴다. `x`(epoch ms)를 ET 날짜로 바꾼다. `x % 86_400_000 === 0`이면 UTC 자정 기준 날짜, 아니면 ET 변환 **[검증 필요: `proxy/scripts/inspect-cnn.mjs`가 앞 3개 x를 두 해석으로 나란히 찍는다]**. `source: 'cnn-historical'` |
+| 백필 | 첫 실행과 결측 보충에만 `fear_and_greed_historical`을 쓴다. `x`(epoch ms)를 ET 날짜로 바꾼다. `x % 86_400_000 === 0`이면 UTC 자정 기준 날짜, 아니면 ET 변환. 실응답 확인(2026-10-15): 과거 점은 UTC 자정, 마지막 점만 장중 시각. `graphdata/<YYYY-MM-DD>` 로 2020-07-15 이후 이력을 받을 수 있다(그 이전은 500). `source: 'cnn-historical'` |
 | 우선순위 | `own` > `cnn-historical` > `seed`(외부 CSV, v1 미사용) |
-| 교차 확인 | 응답에 `timestamp`가 있으면 그 ET 날짜가 t와 다를 때 `fg-date-mismatch` 플래그 **[검증 필요]** |
+| 교차 확인 | 응답에 `timestamp`가 있으면 그 ET 날짜가 t와 다를 때 `fg-date-mismatch` 플래그를 달고 **그 현재값은 `own`으로 남기지 않는다**(t 값은 historical 로). 장중 실행이나 Actions 지연으로 다음 거래일의 장중 값이 t 의 마감 값을 영구히 덮어쓰던 버그(2026-10-14 실측)를 막는다. 실응답에 `timestamp` 필드가 있음을 확인(2026-10-15) |
 | 절차 | **M2의 0번 작업** = 로컬에서 inspect 스크립트 1회 실행 → 실응답의 필드 형태만 남기고 히스토리를 30일로 잘라 픽스처로 커밋(라이선스 최소화) |
 
 ### 3.4 달력·정렬·결측 규칙
@@ -164,7 +165,7 @@ CNN은 장중에도 값을 갱신하므로 "거래일 t의 FG_t"를 정의해야
 | 종가 O, FG X(5일 이내 값도 없음) | P는 계산, `fg/fear/rfg/frm = null` | "심리 데이터를 아직 못 받았어요", 사분면·FRM 미표시 |
 | 종가 X, FG O(주말·휴장일 관측) | 행을 만들지 않음. 관측은 저장소에만 | 다음 거래일에 as-of로 사용 |
 | FG가 이전 날짜 값(`fgStaleDays ≥ 1`) | 값 사용, `fgStaleDays` 동봉 | "심리 지수는 9/11 값" 보조 문구 |
-| 종가 < 370개 | 스냅샷 생성 거부(잡 실패) | 목 모드에서만 발생 가능 |
+| 종가 < 1570개 | 스냅샷 생성 거부(잡 실패) | 목 모드에서만 발생 가능 |
 | 잡 시각에 오늘 종가가 아직 없음 | 새 스냅샷 없음, 이전 유지 | delayed 배지(§3.5) |
 
 ### 3.5 신선도 — 거래일 기준
@@ -207,9 +208,8 @@ CNN은 장중에도 값을 갱신하므로 "거래일 t의 FG_t"를 정의해야
 | $DD_t = \dfrac{Close_t - \max_{i\in[0,N-1]}Close_{t-i}}{\max_{i\in[0,N-1]}Close_{t-i}}$ | `rollingDrawdown(closes, N)` | 현재 포함 N개 창. 고점이 현재면 0. `t < N−1`이면 null. 종가 기준(§5.1의 "고가"는 쓰지 않는다 — 수식 §2.2는 종가로 정의) |
 | $SMA_{M,t} = \frac{1}{M}\sum_{k=0}^{M-1}Close_{t-k}$, $DISP_t = \dfrac{Close_t - SMA_{M,t}}{SMA_{M,t}}$ | `rollingSma(closes, M)`, `rollingDisparity(closes, M)` | |
 | $r_t = \ln(Close_t/Close_{t-1})$, $RV_t = \sqrt{252}\sqrt{\frac{1}{K-1}\sum_{j=0}^{K-1}(r_{t-j}-\bar r)^2}$ | `computeLogReturns(closes)`, `rollingRealizedVol(closes, K, ANNUALIZATION_DAYS)` | **표본표준편차(K−1), 평균 차감.** 수익률 K개 → 종가 K+1개 필요. `t < K`이면 null. 252는 `ANNUALIZATION_DAYS`로 창 W와 **다른 상수** |
-| $Composite\_Damage_t = \alpha(-DD_t)+\beta(-DISP_t)+\gamma RV_t$ | `compositeDamage(dd, disp, rv, params)` | 하나라도 null이면 null |
-| $P_t = \mathrm{PercentileRank}_W(Composite\_Damage_t)\times 100$ | `rollingPercentileRank(values, W)` | §4.1 |
-| $RFG_t = w_1 FG_t + w_2(100-P_t)$ | `rfgOf(fg, p, params)` | `assertParams`: $w_1+w_2=1$, 창 ≥ 2 |
+| $P_t = Composite\_Damage_t = \dfrac{\alpha\,\mathrm{pct}_W(-DD)_t+\beta\,\mathrm{pct}_W(-DISP)_t+\gamma\,\mathrm{pct}_W(RV)_t}{\alpha+\beta+\gamma}$ (v2. v1 은 $\mathrm{pct}_W(\alpha(-DD)+\beta(-DISP)+\gamma RV)$) | `rollingPercentileRank(values, W)` ×3, `compositeDamage(pdd, pdisp, prv, params)` | 성분별 백분위(§4.1) 중 하나라도 null이면 null. 단위가 다른 원시값을 섞지 않는다 |
+| $RFG^{raw}_t = w_1 FG_t + w_2(100-P_t)$, $RFG_t = \mathrm{EMA}_{span}(RFG^{raw})_t$ | `rfgOf(fg, p, params)`, `emaSkipNull(values, RFG_EMA_SPAN)` | `assertParams`: $w_1+w_2=1$, 창 ≥ 2, span ≥ 1. EMA 는 α = 2/(span+1), 첫 유효값에서 시작, 결측일은 null·상태 유지. 구간 판정·화면은 평활값 |
 | $FRM_t = \dfrac{P_t}{Fear_t+\epsilon}$ | `frmOf(p, fear, params)` | 값은 캡하지 않는다. 표시 게이트는 §4.4 |
 
 ### 4.1 롤링 백분위 — 확정 정의
@@ -222,7 +222,7 @@ CNN은 장중에도 값을 갱신하므로 "거래일 t의 FG_t"를 정의해야
 | 순위 | $P_t = \dfrac{\#\{x<v\} + 0.5\,(\#\{x=v\}-1)}{W-1}\times 100$, v = 현재값 |
 | 성질 | 동률 없을 때 창 최대 → **100**, 최소 → **0**. 창 전체 동률(횡보) → **50** |
 | 동률 판정 | IEEE 정확 동치 |
-| W | 252 기본. 756은 파라미터만 바꾸면 됨(종가 815개 필요) |
+| W | 1260 기본(v2, 약 5년). v1 252 |
 
 다른 관례와의 차이(백테스트를 파이썬으로 교차검증할 때 참고):
 
@@ -234,10 +234,10 @@ CNN은 장중에도 값을 갱신하므로 "거래일 t의 FG_t"를 정의해야
 
 ### 4.2 워밍업 길이
 
-- Composite 첫 정의 인덱스 = `max(N, M, K+1) − 1` = 59
-- P 첫 정의 인덱스 = 59 + (W−1) = 310 → **최소 종가 311개** = `minClosesRequired(params) = max(N, M, K+1) + W − 1`
-- 스냅샷 히스토리 60거래일 → **370개** = `minClosesForSnapshot(params, HISTORY_DAYS)`. 테스트가 `DATA_GATES.MIN_CLOSES_FOR_SNAPSHOT`과의 일치를 검사한다.
-- FRED 10년 ≈ 2,500개이므로 운영에서는 여유가 크다. 백테스트에서 FG 1년(≈250 거래일)과 겹치려면 ≈ 561개.
+- 성분 첫 정의 인덱스 = `max(N, M, K+1) − 1` = 251 (v2: N=252 가 가장 길다)
+- P 첫 정의 인덱스 = 251 + (W−1) = 1510 → **최소 종가 1511개** = `minClosesRequired(params) = max(N, M, K+1) + W − 1`
+- 스냅샷 히스토리 60거래일 → **1570개** = `minClosesForSnapshot(params, HISTORY_DAYS)`. 테스트가 `DATA_GATES.MIN_CLOSES_FOR_SNAPSHOT`과의 일치를 검사한다.
+- FRED 10년 ≈ 2,500개이므로 운영에서는 여유가 있다(Stooq·Yahoo 폴백도 10년 범위). 백테스트는 `research/` 가 FRED 장기 이력으로 따로 한다(§4.6).
 
 ### 4.3 표시 반올림과 판정의 일치
 
@@ -251,13 +251,14 @@ CNN은 장중에도 값을 갱신하므로 "거래일 t의 FG_t"를 정의해야
 ### 4.4 상수 테이블 (`src/core/constants.ts`)
 
 ```ts
-/** 계산 파라미터 — 하나 바꾸면 파이프라인·앱·백테스트·스토어 그림이 함께 바뀐다. 보고서 §2 권장값. */
+/** 계산 파라미터(v2, §4.6) — 하나 바꾸면 파이프라인·앱·백테스트·스토어 그림이 함께 바뀐다. 주석은 v1(보고서 §2 권장값). */
 export const RFG_PARAMS = {
-  DD_WINDOW_N: 60, SMA_WINDOW_M: 50, RV_WINDOW_K: 20,
-  ANNUALIZATION_DAYS: 252, PERCENTILE_WINDOW_W: 252,
-  ALPHA_DD: 0.5, BETA_DISP: 0.3, GAMMA_RV: 0.2,
-  W1_SENTIMENT: 0.4, W2_PRICE: 0.6,
+  DD_WINDOW_N: 252, SMA_WINDOW_M: 200, RV_WINDOW_K: 20,     // v1 60, 50, 20
+  ANNUALIZATION_DAYS: 252, PERCENTILE_WINDOW_W: 1260,        // v1 W 252
+  ALPHA_DD: 0.5, BETA_DISP: 0.3, GAMMA_RV: 0.2,              // 같음(v2 는 성분별 백분위에 건다)
+  W1_SENTIMENT: 0.6, W2_PRICE: 0.4,                          // v1 0.4, 0.6
   EPSILON: 1e-5,
+  RFG_EMA_SPAN: 3,                                           // v2 신규(1 이면 평활 없음)
 } as const;
 
 /** 문턱 — 보고서 §3·§4·§5.1 값 그대로. 점수가 아니라 이름을 붙이거나 막는 경계. 부등호는 주석의 방향이 유일한 진실. */
@@ -282,8 +283,8 @@ export const DATA_GATES = {
   MAX_ABS_LOG_RETURN: 0.25,        // 보고서 외: 초과 시 소스 오염 의심 → 해당 소스 거부
   MAX_CALENDAR_GAP_DAYS: 5,        // 보고서 외: 거래일 사이 달력 간격 초과 시 경고
   HISTORY_DAYS: 60,                // 보고서 외: 스냅샷 히스토리 길이(거래일)
-  MIN_CLOSES: 311,                 // = minClosesRequired(RFG_PARAMS) — 테스트가 일치 검사
-  MIN_CLOSES_FOR_SNAPSHOT: 370,    // = MIN_CLOSES + HISTORY_DAYS − 1 — 테스트가 일치 검사
+  MIN_CLOSES: 1511,                // = minClosesRequired(RFG_PARAMS) — 테스트가 일치 검사 (v1 311)
+  MIN_CLOSES_FOR_SNAPSHOT: 1570,   // = MIN_CLOSES + HISTORY_DAYS − 1 — 테스트가 일치 검사 (v1 370)
   SNAPSHOT_SELF_CLOCK_AFTER_HOURS: 48, // 보고서 외: 스냅샷이 이보다 오래되면 앱이 기기 시각으로 기대 거래일 재계산
 } as const;
 
@@ -313,7 +314,32 @@ export const DISPLAY_DIGITS = { score: 0, ratioPercent: 1, frm: 2 } as const;
 | `EUPHORIA` | RFG ≥ 80 | `HIDDEN_CRASH` | FRM > 1.5 |
 | `UNKNOWN` | 결측 | `SUPPRESSED` / `UNKNOWN` | Fear < `FRM_MIN_FEAR` / 결측 |
 
-`signals`(BUY/RISK)는 `THRESHOLDS.SIGNAL_*`로 계산하되 `gates.frmOk`가 false면 RISK는 false. **v1 화면에는 내지 않는다.** 화면에는 국면 서술만 있고 "매수·헤지·현금 비중" 같은 행동 지시 문구는 없다(§8 doctor가 금지 단어 검사).
+`signals`(BUY/RISK)는 `THRESHOLDS.SIGNAL_*`로 계산하되 `gates.frmOk`가 false면 RISK는 false. **화면에는 내지 않는다**(지수를 보여주는 화면이다). 화면에는 지수와 국면 서술만 있고 "매수·헤지·현금 비중" 같은 행동 지시 문구는 없다(§8 doctor가 금지 단어 검사).
+
+### 4.6 v2 변경 근거 (2026-10-15, `research/README.md`)
+
+목표는 "지금 시장이 얼마나 무서운가"를 정확히 보여주는 지수다. 그래서 **지수 품질**로 골랐다.
+
+| 기준 | 정의 |
+|---|---|
+| 정확도 (AUC) | 실제 일을 정답지로: 1년 고점 대비 −10% 이상 바닥 부근 = 공포, 1년 고점 −3% 이내·3개월 상승 = 탐욕(급락 뒤 회복한 날 포함). 지수가 공포일을 탐욕일보다 낮게 매기는 확률 |
+| VIX 일치 | 가격과 독립인 옵션 시장의 공포(VIX)와의 순위상관 — 정답지가 가격으로 만들어진 순환 논리를 막는다 |
+| CNN 상관 | 대중 심리와 너무 멀어지지 않는가(≥ 0.8) |
+| 하루 변동 | 하루 평균 |변화|. CNN(3.2) 이하 |
+
+나스닥 종합(1977–)·닛케이(1960–)·나스닥100(1993–)·S&P500 에서 가격 구조 25,344개, 결합·평활 1,120개를 평가했다. 세 장기 시장의 순위가 거의 같았다(순위상관 0.96–0.98).
+
+| | v1 | v2 | 이유 |
+|---|---|---|---|
+| 낙폭 창 N | 60 | 252 (1년 고점) | 짧은 창은 조정 중 반등에 공포가 너무 빨리 풀리고 하루 변동이 컸다 |
+| 이동평균 창 M | 50 | 200 (200일선) | 같은 이유 |
+| 백분위 창 W | 252 | 1260 (약 5년) | 1년 창은 긴 약세장에서 기준이 같이 내려가 공포를 덜 보였다 |
+| P 합성 | 원시값 합성 후 백분위 | 성분별 백분위의 가중 평균 | 단위가 다른 값(연율 변동성 등)이 합성을 지배하지 않는다 |
+| 가중치 w1/w2 | 0.4/0.6 | 0.6/0.4 | 0.3–0.6 이 모두 정확도 0.99 근처(평탄). CNN 상관 ≥ 0.8 을 지키는 값 |
+| 평활 | 없음 | 3일 EMA | 하루 변동 5.9 → 2.9, 정확도 손실 거의 없음 |
+
+결과(대표): 정확도 v1 0.911–0.963 → v2 0.988–0.994, VIX 일치 0.34–0.52 → 0.48–0.69, 하루 변동 4.4–5.9 → 2.0–2.9. 바꾸지 않은 것: 백분위 정의(§4.1), α/β/γ, 구간 문턱 20/80, 사분면·FRM 문턱, 반올림 규칙.
+처음에는 "지수가 낮으면 이후 수익률이 높은가"(예측력)로 골랐으나, 그렇게 고른 엔진은 반등 뒤에도 공포에 머물고(2025-05-30 CNN 62 / 그 엔진 33) 10% 조정을 놓쳐 지수로서 부적합해 기각했다(`research/README.md` §8).
 
 ---
 
@@ -359,7 +385,7 @@ export function rollingRealizedVol(closes: readonly number[], k: number, annuali
 export function rollingPercentileRank(values: readonly (number | null)[], w: number): (number | null)[]; // §4.1
 
 // ── damage.ts ─────────────────────────────────────────────────────────────
-export function compositeDamage(dd: number | null, disp: number | null, rv: number | null, p?: RfgParams): number | null;
+export function compositeDamage(pdd: number | null, pdisp: number | null, prv: number | null, p?: RfgParams): number | null; // 성분별 백분위의 가중 평균
 export function computePriceDamage(prices: readonly PricePoint[], p?: RfgParams): DamageRow[];
 
 // ── align.ts ──────────────────────────────────────────────────────────────
@@ -371,6 +397,7 @@ export function mergeFgHistory(existing: readonly FgPoint[], incoming: readonly 
 export function fearFromFg(fg: number): number;
 export function rfgOf(fg: number, p: number, params?: RfgParams): number;
 export function frmOf(p: number, fear: number, params?: RfgParams): number;
+export function emaSkipNull(values: readonly (number | null)[], span: number): (number | null)[];
 export function computeRfgSeries(prices: readonly PricePoint[], fg: readonly FgPoint[], params?: RfgParams, gates?: typeof DATA_GATES): RfgRow[];
 
 // ── classify.ts ───────────────────────────────────────────────────────────
@@ -673,7 +700,7 @@ collect:
   1. expected = expectedLatestTradingDate(now)
   2. cnn ← fetch/parse/validate → fg 관측 append(첫 관측 유지) → 실패 시 history 마지막 값(신선도 게이트 안) → 그래도 없으면 fg=null
   3. 지수별: price.select() (§3.2) → 없으면 그 지수는 이전 스냅샷 유지, result='partial'
-  4. rows = computeRfgSeries(prices, fgHistory) ; 검증: 종가 ≥ 370, 마지막 행 date == expected
+  4. rows = computeRfgSeries(prices, fgHistory) ; 검증: 종가 ≥ 1570, 마지막 행 date == expected
   5. snapshot = buildSnapshot(...) ; parseSnapshot(snapshot).ok 아니면 게시 중단(버그)
   6. publish: 임시 파일 → rename. status.json 항상 갱신. healthchecks 핑(성공 /, 실패 /fail)
 ```
@@ -749,30 +776,30 @@ collect:
 
 ### 9.1 core 손계산 픽스처 (골든, 재검산 완료)
 
-파라미터를 작게 주입(N=3, M=3, K=3, W=4, 가중치는 기본값)해 손으로 검산 가능하게 한다.
+파라미터를 작게 주입(N=3, M=3, K=3, W=4, 평활 없음, 가중치는 기본값)해 손으로 검산 가능하게 한다. v2 에서 COMP 는 성분별 백분위의 가중 평균(= P)이다.
 종가 `[100,102,101,105,103,99,104,106,106,110]`, FG `[70,72,68,75,60,40,55,80,82,90]`.
 
-| i | close | r | DD | DISP | RV | COMP | P | FG | Fear | RFG | FRM |
+| i | close | r | DD | DISP | RV | pct(−DD) / pct(−DISP) / pct(RV) | COMP = P | FG | Fear | RFG | FRM |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | 0 | 100 | null | null | null | null | null | null | 70 | 30 | null | null |
 | 1 | 102 | 0.019803 | null | null | null | null | null | 72 | 28 | null | null |
 | 2 | 101 | −0.009852 | −0.009804 | 0 | null | null | null | 68 | 32 | null | null |
-| 3 | 105 | 0.038840 | 0 | 0.022727 | 0.389533 | 0.071088 | null | 75 | 25 | null | null |
-| 4 | 103 | −0.019231 | −0.019048 | 0 | 0.494882 | 0.108500 | null | 60 | 40 | null | null |
-| 5 | 99 | −0.039609 | −0.057143 | −0.032573 | 0.646184 | 0.167580 | null | 40 | 60 | null | null |
-| 6 | 104 | 0.049271 | 0 | 0.019608 | 0.739132 | 0.141944 | 66.667 | 55 | 45 | 42.000 | 1.4815 |
-| 7 | 106 | 0.019048 | 0 | 0.029126 | 0.717398 | 0.134742 | 33.333 | 80 | 20 | 72.000 | 1.6667 |
-| 8 | 106 | 0 | 0 | 0.006329 | 0.394415 | 0.076984 | 0.000 | 82 | 18 | 92.800 | 0.0000 |
-| 9 | 110 | 0.037041 | 0 | 0.024845 | 0.294046 | 0.051356 | 0.000 | 90 | 10 | 96.000 | 0.0000 |
+| 3 | 105 | 0.038840 | 0 | 0.022727 | 0.389533 | null / null / null | null | 75 | 25 | null | null |
+| 4 | 103 | −0.019231 | −0.019048 | 0 | 0.494882 | null / null / null | null | 60 | 40 | null | null |
+| 5 | 99 | −0.039609 | −0.057143 | −0.032573 | 0.646184 | 100 / 100 / null | null | 40 | 60 | null | null |
+| 6 | 104 | 0.049271 | 0 | 0.019608 | 0.739132 | 16.667 / 33.333 / 100 | 38.333 | 55 | 45 | 57.667 | 0.8519 |
+| 7 | 106 | 0.019048 | 0 | 0.029126 | 0.717398 | 16.667 / 0 / 66.667 | 21.667 | 80 | 20 | 79.333 | 1.0833 |
+| 8 | 106 | 0 | 0 | 0.006329 | 0.394415 | 33.333 / 66.667 / 0 | 36.667 | 82 | 18 | 74.533 | 2.0370 |
+| 9 | 110 | 0.037041 | 0 | 0.024845 | 0.294046 | 50 / 33.333 / 0 | 35.000 | 90 | 10 | 80.000 | 3.5000 |
 
-검산 예 i=3: SMA=(102+101+105)/3=102.667 → DISP=(105−102.667)/102.667=0.022727. r 창 {0.019803, −0.009852, 0.038840}, 평균 0.016264, 표본분산 6.0215e−4 → sd 0.024538 × √252 = 0.38953. i=6: 창 COMP {0.0711, 0.1085, 0.1676, 0.1419}, 현재보다 작은 값 2개, 동률 1(자기) → (2+0)/3 = 66.667. RFG = 0.4×55 + 0.6×(100−66.667) = 42.0. FRM = 66.667/45.00001 = 1.4815. 첫 COMP 인덱스 3, 첫 P 인덱스 6, `minClosesRequired` = 7.
+검산 예 i=3: SMA=(102+101+105)/3=102.667 → DISP=(105−102.667)/102.667=0.022727. r 창 {0.019803, −0.009852, 0.038840}, 평균 0.016264, 표본분산 6.0215e−4 → sd 0.024538 × √252 = 0.38953. i=6: −DD 창 {0, 0.019, 0.057, 0} 에서 현재 0 → 작은 값 0, 동률 2 → (0+0.5)/3 = 16.667; −DISP 창 {−0.0227, 0, 0.0326, −0.0196} 에서 현재 −0.0196 → 작은 값 1 → 33.333; RV 창에서 현재가 최대 → 100. P = 0.5×16.667 + 0.3×33.333 + 0.2×100 = 38.333. RFG = 0.6×55 + 0.4×(100−38.333) = 57.667. FRM = 38.333/45.00001 = 0.8519. 첫 P 인덱스 6, `minClosesRequired` = 7. RFG_EMA_SPAN=3(α=0.5)이면 RFG 는 57.667, 68.5, 71.517, 75.758.
 
 ### 9.2 테스트 목록
 
 | 파일 | 검사 |
 |---|---|
-| `core/__tests__/series.test.ts` | 위 표 r/DD/DISP/RV(1e−6); 창 미달 null; `rollingPercentileRank`: 단조 증가 → 100, 감소 → 0, 전부 동률 → 50, 창 안 null → null, midrank/(W−1) 정확식 |
-| `rfg.test.ts` | 표의 P/RFG/FRM; `assertParams` 위반 throw; `minClosesRequired()==311`, `minClosesForSnapshot()==370` == `DATA_GATES` |
+| `core/__tests__/series.test.ts` | 위 표 r/DD/DISP/RV(1e−6); 창 미달 null; `rollingPercentileRank`: 단조 증가 → 100, 감소 → 0, 전부 동률 → 50, 창 안 null → null, midrank/(W−1) 정확식, 표의 성분별 백분위 열 |
+| `rfg.test.ts` | 표의 P/RFG/FRM; `assertParams` 위반 throw; `minClosesRequired()==1511`, `minClosesForSnapshot()==1570` == `DATA_GATES`; `emaSkipNull`(결측 유지), EMA 적용 시 RFG 만 바뀜 |
 | `align.test.ts` | 토요일 관측 FG가 월요일 행에 붙고 `fgStaleDays=2`; 6일 공백 → null; 휴장일 FG는 행 없음; `mergeFgHistory` 우선순위·기존 값 유지 |
 | `classify.test.ts` | 사분면 경계 8개(±0.5 반올림 케이스 포함), NEUTRAL, rfgZone 20/80 경계, frmZone 0.5/1.5 경계(1.495/1.505), `Fear<10` → SUPPRESSED·risk=false, 결측 → UNKNOWN·시그널 false, BUY 두 조건 각각, RISK |
 | `round.test.ts` | `roundTo` 반올림 규칙, 음수, `roundForDisplay` null 전파 |
@@ -818,7 +845,7 @@ collect:
 2. FRED SP500/NASDAQ100이 전일 종가를 몇 시(ET)에 반영하는지 — 22:30 UTC 실행에서 FRED가 자주 `date_lag`면 우선순위를 Stooq → FRED로 바꿀지.
 3. 레포 공개 여부 — 공개면 GitHub Pages 가능(데이터 히스토리 노출), 비공개면 Cloudflare 계정 필요. 1순위는 Cloudflare Pages.
 4. 미니앱의 외부 도메인 fetch·평문 HTTP 허용 여부(§3.7).
-5. 백테스트로 W(252 vs 756)·N/M/K·α/β/γ 기본값을 바꿀지 — 바꾸면 `constants.ts` 한 곳만.
+5. 백테스트로 W(252 vs 756)·N/M/K·α/β/γ 기본값을 바꿀지 — **v2 에서 결정(§4.6)**. 다시 바꾸면 `constants.ts` 한 곳 + `research/` 재실행.
 6. 면책 문구·스토어 설명의 최종 문안.
 7. 홈 기본 지수(SPX 가정)와 두 지수 RFG가 크게 다를 때의 표현.
 
@@ -833,4 +860,5 @@ collect:
 | M2 | `proxy/` 수집·검증·계산·게시 + 픽스처 e2e + 골든 스냅샷 + `inspect` 스크립트 + 로컬 `serve` + Actions 워크플로 | 픽스처로 e2e 통과, 계약 테스트 통과. **로컬에서 inspect 실행 후 [검증 필요] 해소** | **코드 완료** (테스트 27). inspect 실행은 로컬 작업 |
 | M3 | `src/data`, `src/ui`, `src/screens`, 홈·정보 화면, 목 모드, `check-routes`/`check-pure-modules`/`predeploy`, doctor 확장 | 상태표 10행 뷰모델·화면 테스트 통과, `ait build` 통과. **샌드박스에서 목 모드 홈·정보 렌더 확인은 로컬 작업** | **코드 완료** (테스트 156) |
 | M4 | Actions cron + Cloudflare Pages + healthchecks + 샌드박스 실데이터 | 3일 연속 `ok`, 앱이 실데이터 `ready`(§3.7 실험 통과) | |
-| M5 | 백테스트 리포트 1회, 파라미터 확정, 스토어 그림·텍스트 생성, `predeploy`, 아이콘 URL, 배포 | doctor 신규 항목 통과, 키 있는 기계에서 `ait deploy`, 스토어 등록 | |
+| M5 | 백테스트 리포트 1회, 파라미터 확정, 스토어 그림·텍스트 생성, `predeploy`, 아이콘 URL, 배포 | doctor 신규 항목 통과, 키 있는 기계에서 `ait deploy`, 스토어 등록 | 백테스트·파라미터 확정은 v2 로 완료. 앱인토스 배포는 하지 않기로 함(2026-10-15) |
+| v2 | 엔진 재설계(지수 품질 기준): `research/` 백테스트, `src/core` v2, 수집 own 날짜 버그 수정 | TS = Python 6자리 일치, 테스트 통과, doctor 통과 | **완료** (2026-10-15) |

@@ -1,5 +1,5 @@
 import { DATA_GATES, RFG_PARAMS, assertParams, minClosesForSnapshot, minClosesRequired } from '../constants';
-import { computeRfgSeries, fearFromFg, frmOf, rfgOf } from '../rfg';
+import { computeRfgSeries, emaSkipNull, fearFromFg, frmOf, rfgOf } from '../rfg';
 import { EXPECTED, FG_POINTS, PRICES, TINY_PARAMS, expectSeries } from '../__fixtures__/tiny';
 
 describe('rfg — 모델 A/B 와 시계열 조립', () => {
@@ -7,8 +7,8 @@ describe('rfg — 모델 A/B 와 시계열 조립', () => {
     expect(fearFromFg(41)).toBe(59);
   });
 
-  test('RFG_t = 0.4·FG + 0.6·(100 − P), FRM_t = P / (Fear + ε)', () => {
-    expect(rfgOf(55, 200 / 3)).toBeCloseTo(42, 10);
+  test('RFG_t = 0.6·FG + 0.4·(100 − P), FRM_t = P / (Fear + ε)', () => {
+    expect(rfgOf(55, 200 / 3)).toBeCloseTo(0.6 * 55 + 0.4 * (100 / 3), 10);
     expect(frmOf(200 / 3, 45)).toBeCloseTo((200 / 3) / (45 + 1e-5), 10);
   });
 
@@ -32,11 +32,23 @@ describe('rfg — 모델 A/B 와 시계열 조립', () => {
     expect(minClosesRequired(TINY_PARAMS)).toBe(7);
   });
 
-  test('운영 상수: minClosesRequired = 311, minClosesForSnapshot = 370 (DATA_GATES 와 일치)', () => {
-    expect(minClosesRequired(RFG_PARAMS)).toBe(311);
+  test('운영 상수: minClosesRequired = 1511, minClosesForSnapshot = 1570 (DATA_GATES 와 일치)', () => {
+    expect(minClosesRequired(RFG_PARAMS)).toBe(1511);
     expect(minClosesRequired()).toBe(DATA_GATES.MIN_CLOSES);
     expect(minClosesForSnapshot()).toBe(DATA_GATES.MIN_CLOSES_FOR_SNAPSHOT);
     expect(minClosesForSnapshot()).toBe(DATA_GATES.MIN_CLOSES + DATA_GATES.HISTORY_DAYS - 1);
+  });
+
+  test('emaSkipNull: α = 2/(span+1), 결측은 null 을 내고 상태를 유지, span 1 은 그대로', () => {
+    expect(emaSkipNull([null, 10, 20, null, 40], 3)).toEqual([null, 10, 15, null, 27.5]);
+    expect(emaSkipNull([1, null, 3], 1)).toEqual([1, null, 3]);
+  });
+
+  test('computeRfgSeries: RFG 는 RFG_EMA_SPAN 으로 다듬고, P·Fear·FRM 은 다듬지 않는다', () => {
+    const rows = computeRfgSeries(PRICES, FG_POINTS, { ...TINY_PARAMS, RFG_EMA_SPAN: 3 });
+    expectSeries(rows.map((r) => r.rfg), EXPECTED.rfgEma3, 4);
+    expectSeries(rows.map((r) => r.p), EXPECTED.p, 3);
+    expectSeries(rows.map((r) => r.frm), EXPECTED.frm, 3);
   });
 
   test('assertParams: w1 + w2 ≠ 1 이면 throw', () => {

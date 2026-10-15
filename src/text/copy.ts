@@ -1,6 +1,6 @@
 /**
  * 사용자에게 보이는 모든 문구. 숫자는 core 상수를 보간해서만 만든다(JSX 에 숫자 리터럴 금지).
- * 행동을 지시하는 문구(사고팔라는 권유 등)는 쓰지 않는다 — 국면 서술만. doctor 가 금지 단어를 검사한다.
+ * 행동을 지시하는 문구(사고팔라는 권유 등)는 쓰지 않는다 — 지수와 국면 서술만. doctor 가 금지 단어를 검사한다.
  * 순수 TS: react/react-native import 금지(스토어 그림 스크립트가 그대로 import).
  */
 import { DATA_GATES, RFG_PARAMS as P, THRESHOLDS as T } from '../core/constants';
@@ -10,10 +10,10 @@ import type { FrmZone, IndexSymbol, Quadrant, RfgZone } from '../core/types';
 export const APP_TITLE = '실질 공포탐욕지수';
 
 export const DISCLAIMER = {
-  version: 1,
+  version: 2,
   short: '이 지수는 투자 조언이 아니에요.',
   full:
-    '이 지수는 공개된 연구 보고서의 산식을 그대로 계산해 보여주는 참고 자료예요. ' +
+    '이 지수는 공개된 연구 보고서의 산식을 바탕으로, 실제 하락·회복 국면을 더 정확히 보여주도록 1977~2026년 백테스트로 기준값을 조정해 계산한 참고 자료예요. ' +
     '투자 권유나 자문이 아니며, 어떤 결정의 근거로도 쓰지 마세요. ' +
     '값은 미국 정규장 마감 후 하루 한 번 갱신되고 실시간이 아니에요. ' +
     '심리 지표는 비공식 경로로 수집한 값이라 예고 없이 중단될 수 있어요.',
@@ -85,7 +85,7 @@ export const COPY = {
     dd: `${P.DD_WINDOW_N}일 고점 대비 낙폭`,
     disp: `${P.SMA_WINDOW_M}일 이동평균 대비 이격도`,
     rv: `${P.RV_WINDOW_K}일 실현 변동성(연율)`,
-    p: `최근 ${P.PERCENTILE_WINDOW_W}거래일 안에서의 가격 훼손도 백분위`,
+    p: `세 지표를 각각 최근 ${P.PERCENTILE_WINDOW_W}거래일 안의 백분위로 바꿔 가중 평균한 가격 훼손도`,
   }),
   detailLine: (dd: string, disp: string, rv: string): string =>
     `${P.DD_WINDOW_N}일 고점 대비 ${dd} · ${P.SMA_WINDOW_M}일선 대비 ${disp} · ${P.RV_WINDOW_K}일 변동성 ${rv}`,
@@ -101,7 +101,7 @@ export const COPY = {
     { key: LABELS.frmZone.HIDDEN_CRASH, rule: `전이 배수 ${T.FRM_HIDDEN_CRASH_MIN} 초과` },
   ],
   paramsSummary: (): string =>
-    `가중치 ${P.W1_SENTIMENT}(심리) / ${P.W2_PRICE}(실질 가격) · 훼손도 합성 ${P.ALPHA_DD}/${P.BETA_DISP}/${P.GAMMA_RV}(낙폭/이격도/변동성)`,
+    `가중치 ${P.W1_SENTIMENT}(심리) / ${P.W2_PRICE}(실질 가격) · 훼손도 ${P.ALPHA_DD}/${P.BETA_DISP}/${P.GAMMA_RV}(낙폭/이격도/변동성 백분위) · 기준 ${P.PERCENTILE_WINDOW_W}거래일 · ${P.RFG_EMA_SPAN}일 평활`,
   mockBadge: '샘플 데이터',
   mockHint: '프록시 주소가 비어 있어 예시 값을 보여줘요.',
   sourcesNotice: '심리 지표: CNN Business Fear & Greed Index(비공식 경로로 수집). 지수: FRED, Stooq. 참고용이며 실시간이 아니에요.',

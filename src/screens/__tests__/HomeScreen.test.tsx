@@ -20,12 +20,12 @@ function renderHome(client: RfgClient, platform: Platform = createMemoryPlatform
 describe('HomeScreen', () => {
   test('normal: 값·구간·기준일·면책이 보이고 배지는 없다', async () => {
     renderHome(createMockClient({ scenario: 'normal', now: () => NOW }));
-    await waitFor(() => expect(screen.getByTestId('gauge-value')).toHaveTextContent('66'));
+    await waitFor(() => expect(screen.getByTestId('gauge-value')).toHaveTextContent('48'));
     expect(screen.getByTestId('gauge-zone')).toHaveTextContent(LABELS.rfgZone.MID);
     expect(screen.getByTestId('basis-line')).toHaveTextContent(/미국 9\/11\(금\) 마감 기준/);
     expect(screen.getByTestId('disclaimer')).toHaveTextContent(/투자 조언이 아니에요/);
     expect(screen.queryByTestId('badge')).toBeNull();
-    expect(screen.getByTestId('frm-sentence')).toHaveTextContent(/전이 0\.38배/);
+    expect(screen.getByTestId('frm-sentence')).toHaveTextContent(/전이 0\.90배/);
     expect(screen.getByTestId('cell-Q1')).toBeTruthy();
   });
 
@@ -49,7 +49,7 @@ describe('HomeScreen', () => {
     await act(async () => {
       fireEvent.press(screen.getByText(COPY.retry));
     });
-    await waitFor(() => expect(screen.getByTestId('gauge-value')).toHaveTextContent('66'));
+    await waitFor(() => expect(screen.getByTestId('gauge-value')).toHaveTextContent('48'));
   });
 
   test('오프라인: 안내 문구', async () => {

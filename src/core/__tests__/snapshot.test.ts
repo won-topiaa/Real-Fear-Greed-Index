@@ -33,7 +33,7 @@ describe('buildSnapshot', () => {
     expect(s.markets.SPX.closeAtUtc).toBe('2026-08-14T20:00:00.000Z');
     expect('close' in s.markets.SPX.latest).toBe(false);
     expect(s.markets.SPX.history).toHaveLength(4);
-    expect(s.markets.SPX.history[3]?.rfg).toBeCloseTo(96, 6);
+    expect(s.markets.SPX.history[3]?.rfg).toBeCloseTo(80, 6);
     expect(s.markets.NDX.flags).toEqual(['fg-stale']);
     expect(s.params.PERCENTILE_WINDOW_W).toBe(4);
   });

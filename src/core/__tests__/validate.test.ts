@@ -60,9 +60,9 @@ describe('validatePriceSeries', () => {
     expect(issues[0]).toMatchObject({ code: 'gap', fatal: false });
   });
 
-  test('길이 < MIN_CLOSES → too-short (fatal); 운영 게이트는 311', () => {
+  test('길이 < MIN_CLOSES → too-short (fatal); 운영 게이트는 1511', () => {
     const short: PricePoint[] = [{ date: '2026-09-11', close: 100 }];
-    expect(validatePriceSeries(short)).toContainEqual(expect.objectContaining({ code: 'too-short', fatal: true, detail: '1 < 311' }));
+    expect(validatePriceSeries(short)).toContainEqual(expect.objectContaining({ code: 'too-short', fatal: true, detail: '1 < 1511' }));
   });
 });
 

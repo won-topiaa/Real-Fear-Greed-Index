@@ -1,4 +1,4 @@
-import { THRESHOLDS } from '../../core/constants';
+import { RFG_PARAMS, THRESHOLDS } from '../../core/constants';
 import { loadMockSnapshot } from '../../data/mockClient';
 import type { DataState } from '../../data/state';
 import { COPY, LABELS } from '../copy';
@@ -25,16 +25,16 @@ describe('selectHomeViewModel — 홈 상태표 (DESIGN §6.3)', () => {
     const vm = selectHomeViewModel(args({ status: 'success', data, fromCache: false }));
     expect(vm.mode).toBe('ready');
     expect(vm.showScores).toBe(true);
-    expect(vm.rfg).toBe('66');
+    expect(vm.rfg).toBe('48');
     expect(vm.rfgZoneLabel).toBe(LABELS.rfgZone.MID);
     expect(vm.quadrant).toBe('NEUTRAL');
-    expect(vm.quadrantLabel).toBe(COPY.quadrantNone('54', '21'));
-    expect(vm.frmSentence).toBe(COPY.frmSentence('54', '21', '0.38배'));
+    expect(vm.quadrantLabel).toBe(COPY.quadrantNone('54', '48'));
+    expect(vm.frmSentence).toBe(COPY.frmSentence('54', '48', '0.90배'));
     expect(vm.basisLine).toBe('미국 9/11(금) 마감 기준 · 한국 9/12 05:00');
     expect(vm.badge).toBeNull();
     expect(vm.sparkline).toHaveLength(60);
-    expect(vm.a11ySummary).toContain('66');
-    expect(vm.detailLine).toContain('60일 고점 대비');
+    expect(vm.a11ySummary).toContain('48');
+    expect(vm.detailLine).toContain(`${RFG_PARAMS.DD_WINDOW_N}일 고점 대비`);
   });
 
   test('delayed: 노란 배지, 값은 표시', () => {
@@ -63,7 +63,7 @@ describe('selectHomeViewModel — 홈 상태표 (DESIGN §6.3)', () => {
     const vm = selectHomeViewModel(args({ status: 'success', data, fromCache: false }));
     expect(vm.mode).toBe('fg-missing');
     expect(vm.showScores).toBe(false);
-    expect(vm.p).toBe('21');
+    expect(vm.p).toBe('48');
     expect(vm.fear).toBe(EMPTY);
     expect(vm.emptyMessage).toBe(COPY.fgMissing);
   });
