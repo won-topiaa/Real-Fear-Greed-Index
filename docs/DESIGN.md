@@ -668,7 +668,7 @@ proxy/
 | `GET /v1/snapshot.json` | `RfgSnapshot`(§5). 두 지수 포함, 요청 1회 | `public, max-age=600, stale-while-revalidate=86400` |
 | `GET /v1/status.json` | 아래 | `max-age=60` |
 | `GET /v1/history.json` | `RfgHistory`(`src/core/history.ts`): 지수별 `{date, rfg, p}`(RFG 첫 계산일부터, 최대 10년 — NDX 2020-07-15~, SPX 2022-10~) + 최신 세부 지표(DD·DISP·RV 와 성분별 백분위). 두 지수가 모두 새로 계산된 날에만 바뀐다. 공백 없는 JSON | 스냅샷과 같음 |
-| `GET /` | 웹 화면(`web/` → `index.html`·`app.js`·`style.css`, 2026-10-15). CNN 스타일 5구간 게이지·색 안내·과거 값·추이(1년·3년·5년·최대, '두 지수 함께 보기' 비교 모드: S&P 잉크·나스닥 보라 선, 차이 툴팁)·구성 요소. `src/core`·`src/text` 를 번들 | `max-age=300` |
+| `GET /` | 웹 화면(`web/` → `index.html`·`app.js`·`style.css`, 2026-10-15). CNN 스타일 5구간 게이지·색 안내·과거 값·추이(1년·3년·5년·최대, '두 지수 함께 보기' 비교 모드: S&P 잉크·나스닥 보라 선, 차이 툴팁)·주요 사건 때의 지수(`src/text/events.ts` 14건, 당일·1주 뒤·1개월 뒤, 차트 세로선)·구성 요소. `src/core`·`src/text` 를 번들 | `max-age=300` |
 | `GET /static/icon.png` | 앱 아이콘 512×512 (`brand.icon` URL) | 길게 |
 
 GitHub Pages 는 `_headers` 를 읽지 않아 캐시는 기본값(`max-age=600`), CORS 는 기본으로 `*` 다. 파이프라인은 Cloudflare 로 옮길 때를 위해 `public/_headers` 를 계속 쓴다. 실패한 실행도 `status.json` 과 `_headers` 는 게시된다(`snapshot.json` 은 검증 통과 시에만 바뀜).

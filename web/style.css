@@ -495,3 +495,112 @@ th {
 .tooltip .muted {
   color: var(--muted);
 }
+
+/* 주요 사건 */
+.ev-picker {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 8px;
+}
+.ev-picker select {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px 10px;
+}
+.ev-picker select:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.ev-picker .toggle {
+  min-width: 36px;
+  min-height: 36px;
+  font-size: 18px;
+  line-height: 1;
+}
+.toggle:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.ev-head {
+  margin-top: 14px;
+}
+.ev-date {
+  color: var(--muted);
+  font-size: 13px;
+}
+.ev-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-top: 2px;
+}
+.ev-desc {
+  color: var(--ink-2);
+  font-size: 14px;
+  line-height: 1.55;
+  margin: 6px 0 0;
+}
+.ev-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-top: 14px;
+}
+@media (max-width: 520px) {
+  .ev-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.ev-index {
+  background: var(--surface-2);
+  border-radius: 12px;
+  padding: 12px;
+}
+.ev-name {
+  font-weight: 700;
+  font-size: 14px;
+}
+.ev-cells {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+.ev-cell .label {
+  color: var(--muted);
+  font-size: 12px;
+}
+.ev-cell .value {
+  font-size: 20px;
+  font-weight: 700;
+  margin-top: 2px;
+}
+.ev-cell.big .value {
+  font-size: 30px;
+}
+.ev-cell .band {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink-2);
+  font-size: 12px;
+  margin-top: 2px;
+}
+.ev-chart {
+  margin-top: 12px;
+}
+.chart .marker-label {
+  fill: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 3px;
+}

@@ -9,6 +9,7 @@ import { parseHistory } from '../src/core/history';
 import { parseSnapshot } from '../src/core/snapshot';
 import type { Band, HistoryRow, IndexSymbol, RfgHistory, RfgSnapshot } from '../src/core/types';
 import { APP_TITLE, COPY, DISCLAIMER, LABELS, WEB_COPY } from '../src/text/copy';
+import { WORLD_EVENTS } from '../src/text/events';
 import { EMPTY, formatBasisLine, formatKst, formatPercent, formatScore, formatTradingDate } from '../src/text/format';
 
 const SYMBOLS: readonly IndexSymbol[] = ['SPX', 'NDX'];
@@ -39,6 +40,10 @@ interface State {
   index: IndexSymbol;
   range: RangeKey;
   compare: boolean;
+  /** 주요 사건 목록에서 고른 항목(WORLD_EVENTS 인덱스) */
+  eventIdx: number;
+  /** 고른 사건을 추이 차트에 세로선으로 표시할지(사용자가 사건을 고르거나 '차트에서 보기'를 누르면 켠다) */
+  markEvent: boolean;
 }
 
 /** 차트에 그릴 한 선: 공통 날짜 축에 맞춘 값 */
@@ -143,7 +148,7 @@ async function load(): Promise<void> {
     const snap = parseSnapshot(snapRaw);
     if (!snap.ok) throw new Error(`snapshot ${snap.error.path}`);
     const hist = histRaw == null ? null : parseHistory(histRaw);
-    state = { snapshot: snap.value, history: hist && hist.ok ? hist.value : null, index: readIndex(), range: readRange(), compare: readCompare() };
+    state = { snapshot: snap.value, history: hist && hist.ok ? hist.value : null, index: readIndex(), range: readRange(), compare: readCompare(), eventIdx: WORLD_EVENTS.length - 1, markEvent: false };
     render();
   } catch {
     app.innerHTML = `<p class="state">${esc(WEB_COPY.error)}</p><button class="retry" type="button">${esc(WEB_COPY.retry)}</button>`;
@@ -197,7 +202,7 @@ function render(): void {
       ${blocked ? `<p class="blocked">${esc(fresh.level === 'stale' ? COPY.staleBlocked : COPY.fgMissing)}</p>` : gaugeHtml(latest.rfg)}
     </section>
     ${blocked ? '' : compareHtml(rows)}
-    <section class="card">
+    <section class="card" id="chart-card">
       <div class="card-head">
         <h2>${esc(WEB_COPY.chartTitle)} · ${esc(chartTitle)}</h2>
         <div class="controls">
@@ -213,6 +218,7 @@ function render(): void {
       <div class="chart" id="chart"></div>
       ${tableHtml(chart.dates, chart.series)}
     </section>
+    ${eventsHtml(s)}
     ${componentsHtml(s)}
     <footer class="footer">
       <p>${esc(WEB_COPY.method())}</p>
@@ -250,6 +256,29 @@ function render(): void {
     render();
   });
 
+  // 주요 사건: 고르면 차트에 표시, '차트에서 보기'는 그 날짜가 들어가는 가장 짧은 기간으로 바꾸고 차트로 이동
+  const pickEvent = (i: number, focusId: string): void => {
+    if (!state) return;
+    state.eventIdx = Math.max(0, Math.min(WORLD_EVENTS.length - 1, i));
+    state.markEvent = true;
+    render();
+    document.getElementById(focusId)?.focus();
+  };
+  app.querySelector<HTMLSelectElement>('#event-select')?.addEventListener('change', (e) => pickEvent(Number((e.target as HTMLSelectElement).value), 'event-select'));
+  app.querySelector('#event-prev')?.addEventListener('click', () => pickEvent(s.eventIdx - 1, 'event-prev'));
+  app.querySelector('#event-next')?.addEventListener('click', () => pickEvent(s.eventIdx + 1, 'event-next'));
+  app.querySelector('#event-chart')?.addEventListener('click', () => {
+    if (!state) return;
+    const ev = WORLD_EVENTS[state.eventIdx];
+    if (!ev) return;
+    state.markEvent = true;
+    state.range = rangeCovering(ev.date, [...SYMBOLS].map((k) => seriesFor(state as State, k)));
+    saveRange(state.range);
+    render();
+    // 다시 그린 뒤에 이동해야 위치가 맞는다
+    requestAnimationFrame(() => document.getElementById('chart-card')?.scrollIntoView({ block: 'start' }));
+  });
+
   const chartEl = document.getElementById('chart') as HTMLElement;
   chartObserver?.disconnect();
   let lastWidth = 0;
@@ -257,13 +286,37 @@ function render(): void {
     const w = Math.round(chartEl.clientWidth);
     if (w !== lastWidth) {
       lastWidth = w;
-      drawChart(chartEl, chart.dates, chart.series, s.compare);
+      const ev = s.markEvent ? WORLD_EVENTS[s.eventIdx] : undefined;
+      drawChart(chartEl, chart.dates, chart.series, s.compare, ev ? { date: ev.date, label: ev.title } : null);
     }
   });
   chartObserver.observe(chartEl);
 }
 
 /** '2022-10-21' → '2022년 10월 21일' */
+/** date 이상인 첫 행의 인덱스(없으면 −1). 행은 날짜 오름차순. */
+function rowAtOrAfter(rows: HistoryRow[], date: string): number {
+  let lo = 0;
+  let hi = rows.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if ((rows[mid]?.date ?? '') < date) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo < rows.length ? lo : -1;
+}
+
+/** 날짜가 들어가는 가장 짧은 기간 버튼. 가장 긴 이력 기준으로 그날부터 끝까지의 거래일을 센다. */
+function rangeCovering(date: string, lists: HistoryRow[][]): RangeKey {
+  const longest = lists.reduce((a, b) => (b.length > a.length ? b : a), [] as HistoryRow[]);
+  const i = rowAtOrAfter(longest, date);
+  if (i < 0) return 'y1';
+  const span = longest.length - 1 - i;
+  // 사건 앞쪽도 조금 보이도록 여유 10거래일
+  for (const k of ['y1', 'y3', 'y5'] as const) if (span + 10 <= CHART_RANGES[k]) return k;
+  return 'max';
+}
+
 function formatYmd(d: string): string {
   const [y, m, day] = d.split('-').map(Number);
   return y && m && day ? `${y}년 ${m}월 ${day}일` : EMPTY;
@@ -359,7 +412,7 @@ function compareHtml(rows: HistoryRow[]): string {
 
 // ── 1년 추이 차트 ─────────────────────────────────────────────────────────
 
-function drawChart(el: HTMLElement, dates: string[], series: ChartSeries[], compare: boolean): void {
+function drawChart(el: HTMLElement, dates: string[], series: ChartSeries[], compare: boolean, marker: { date: string; label: string } | null): void {
   const n = dates.length;
   if (n < 2 || series.every((sr) => sr.values.every((v) => v == null))) {
     el.innerHTML = `<p class="note">${esc(WEB_COPY.chartEmpty)}</p>`;
@@ -389,7 +442,8 @@ function drawChart(el: HTMLElement, dates: string[], series: ChartSeries[], comp
   const key = (d: string): string => (yearly ? d.slice(0, 4) : d.slice(0, 7));
   const starts: number[] = [];
   for (let i = 1; i < n; i++) if (key(dates[i] ?? '') !== key(dates[i - 1] ?? '')) starts.push(i);
-  const step = !yearly && width < 520 ? 2 : 1;
+  // 눈금 글자가 겹치지 않도록 평균 간격이 46px 이상이 되게 솎는다(좁은 화면의 '최대' 등)
+  const step = Math.max(1, Math.ceil(46 / (iw / Math.max(1, starts.length + 1))));
   const xTicks = starts
     .filter((_, k) => k % step === 0)
     .map((i) => {
@@ -449,11 +503,23 @@ function drawChart(el: HTMLElement, dates: string[], series: ChartSeries[], comp
     })
     .join('');
 
+  // 주요 사건 표시: 그 날짜(또는 다음 거래일)에 세로선과 이름. 축 범위 밖이면 그리지 않는다.
+  let markerSvg = '';
+  if (marker && marker.date >= (dates[0] ?? '') && marker.date <= (dates[n - 1] ?? '')) {
+    let mi = 0;
+    while (mi < n - 1 && (dates[mi] ?? '') < marker.date) mi++;
+    const mx = x(mi);
+    const right = mx > m.l + iw * 0.6;
+    markerSvg = `<line x1="${f(mx)}" x2="${f(mx)}" y1="${m.t}" y2="${f(y(0))}" stroke="var(--ink)" stroke-width="1.5"/>
+      <text x="${f(right ? mx - 6 : mx + 6)}" y="${m.t + 12}" text-anchor="${right ? 'end' : 'start'}" class="marker-label">${esc(marker.label)}</text>`;
+  }
+
   const summary = `${WEB_COPY.chartTitle}: ${formatTradingDate(dates[0] ?? '', 'short')}부터 ${formatTradingDate(dates[n - 1] ?? '', 'short')}까지, ${ends
     .map((e) => `${e.sr.label} ${formatScore(e.v)}`)
     .join(', ')}`;
   el.innerHTML = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(summary)}">
       ${washes}${grid}${base}${yTicks}${xTicks}
+      ${markerSvg}
       ${paths}
       ${endMarks}
       <line class="xhair" x1="0" x2="0" y1="${m.t}" y2="${f(y(0))}" stroke="var(--ink-2)" stroke-width="1" visibility="hidden"/>
@@ -553,6 +619,61 @@ function tableHtml(dates: string[], series: ChartSeries[]): string {
   return `<details><summary>${esc(WEB_COPY.tableTitle)}</summary>
       <table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
     </details>`;
+}
+
+// ── 주요 사건 때의 지수 ───────────────────────────────────────────────────
+
+function eventsHtml(s: State): string {
+  const ev = WORLD_EVENTS[s.eventIdx];
+  if (!ev) return '';
+  const firstDates = [...SYMBOLS].map((k) => seriesFor(s, k)[0]?.date ?? '').filter((d) => d !== '').sort();
+  const options = WORLD_EVENTS.map(
+    (e, i) => `<option value="${i}"${i === s.eventIdx ? ' selected' : ''}>${esc(`${e.date.slice(0, 4)}.${e.date.slice(5, 7)} ${e.title}`)}</option>`,
+  ).join('');
+  const when = WEB_COPY.eventWhen;
+  const blocks = SYMBOLS.map((sym) => {
+    const rows = seriesFor(s, sym);
+    const label = LABELS.index[sym];
+    const start = rows[0]?.date ?? '';
+    if (rows.length === 0 || ev.date < start) {
+      return `<div class="ev-index"><div class="ev-name">${esc(label)}</div><p class="note">${esc(WEB_COPY.eventNoData(label, formatYmd(start)))}</p></div>`;
+    }
+    const i = rowAtOrAfter(rows, ev.date);
+    const cell = (name: string, row: HistoryRow | undefined, big: boolean): string => {
+      const v = row?.rfg ?? null;
+      return `<div class="ev-cell${big ? ' big' : ''}" title="${esc(row ? formatYmd(row.date) : '')}">
+          <div class="label">${esc(name)}</div>
+          <div class="value">${esc(formatScore(v))}</div>
+          <div class="band">${v == null ? '' : bandLabelHtml(bandOf(v))}</div>
+        </div>`;
+    };
+    return `<div class="ev-index">
+        <div class="ev-name">${esc(label)}</div>
+        <div class="ev-cells">${cell(when.day, rows[i], true)}${cell(when.week, rows[i + COMPARE_OFFSETS.week], false)}${cell(when.month, rows[i + COMPARE_OFFSETS.month], false)}</div>
+      </div>`;
+  }).join('');
+  return `<section class="card" id="events">
+      <h2>${esc(WEB_COPY.eventsTitle)}</h2>
+      <p class="note">${esc(WEB_COPY.eventsNote(formatYmd(firstDates[0] ?? '')))}</p>
+      <div class="ev-picker">
+        <button type="button" class="toggle" id="event-prev" aria-label="${esc(WEB_COPY.eventPrev)}"${s.eventIdx === 0 ? ' disabled' : ''}>‹</button>
+        <select id="event-select" aria-label="${esc(WEB_COPY.eventPick)}">${options}</select>
+        <button type="button" class="toggle" id="event-next" aria-label="${esc(WEB_COPY.eventNext)}"${s.eventIdx === WORLD_EVENTS.length - 1 ? ' disabled' : ''}>›</button>
+      </div>
+      <div class="ev-head">
+        <div class="ev-date">${esc(formatYmd(ev.date))} (${esc(weekdayOf(ev.date))})</div>
+        <div class="ev-title">${esc(ev.title)}</div>
+        <p class="ev-desc">${esc(ev.description)}</p>
+      </div>
+      <div class="ev-grid">${blocks}</div>
+      <button type="button" class="toggle ev-chart" id="event-chart">${esc(WEB_COPY.eventShowChart)}</button>
+    </section>`;
+}
+
+function weekdayOf(d: string): string {
+  const t = formatTradingDate(d);
+  const m = /\((.)\)/.exec(t);
+  return m?.[1] ?? '';
 }
 
 // ── 구성 요소 ─────────────────────────────────────────────────────────────
