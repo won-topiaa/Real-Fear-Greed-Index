@@ -178,7 +178,6 @@ const ICON = {
   events: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="15" r="2" fill="currentColor"/></svg>',
   components: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
   method: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="7.6" r="1.3" fill="currentColor"/></svg>',
-  compare: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16l4-5 3 3 5-6 4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
   sentiment: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9" cy="10" r="1.2" fill="currentColor"/><circle cx="15" cy="10" r="1.2" fill="currentColor"/></svg>',
   change: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17V7M7 7l-3 3M7 7l3 3M17 7v10M17 17l-3-3M17 17l3-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   back: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -220,8 +219,13 @@ function homeHtml(s: State): string {
   const rows = seriesFor(s);
   const prev = rows[rows.length - 2]?.rfg ?? null;
   const change = latest.rfg != null && prev != null ? signedScore(latest.rfg, prev) : EMPTY;
-  const spx = s.snapshot.markets.SPX.latest.rfg;
-  const ndx = s.snapshot.markets.NDX.latest.rfg;
+  // '살펴볼 것': 지금 고른 지수 하나의 1개월 변화(두 지수 함께 보기는 추이 화면의 버튼으로만 켠다)
+  const monthAgo = rows[rows.length - 1 - COMPARE_OFFSETS.month]?.rfg ?? null;
+  const promoTitle = latest.rfg != null && monthAgo != null ? WEB_COPY.promoTitle(LABELS.index[s.index], signedScore(latest.rfg, monthAgo)) : LABELS.index[s.index];
+  const promoDesc =
+    latest.rfg != null && monthAgo != null
+      ? WEB_COPY.promoDesc(formatScore(monthAgo), bandText(bandOf(monthAgo)), formatScore(latest.rfg), bandText(bandOf(latest.rfg)))
+      : WEB_COPY.promoNoHistory;
   const stat = (icon: string, value: string, label: string, band: Band | null): string => `<div class="stat">
         <div class="stat-top"><span class="stat-icon">${icon}</span><span class="stat-value">${esc(value)}</span></div>
         <div class="stat-label">${band ? `<span class="swatch" style="--sw:${BAND_COLOR[band]}"></span>` : ''}${esc(label)}</div>
@@ -252,9 +256,9 @@ function homeHtml(s: State): string {
     <h2 class="section-title">${esc(WEB_COPY.promoSection)}</h2>
     <section class="card promo">
       <div class="promo-body">
-        <span class="promo-icon">${ICON.compare}</span>
-        <div class="promo-title">${esc(WEB_COPY.promoTitle(formatScore(spx), formatScore(ndx)))}</div>
-        <p class="promo-desc">${esc(WEB_COPY.promoDesc)}</p>
+        <span class="promo-icon">${ICON.trend}</span>
+        <div class="promo-title">${esc(promoTitle)}</div>
+        <p class="promo-desc">${esc(promoDesc)}</p>
       </div>
       <button type="button" class="pill" data-promo>${esc(WEB_COPY.promoCta)}</button>
     </section>
@@ -370,13 +374,13 @@ function bindCommon(): void {
     state.compare = !state.compare; // 이번 방문 동안만(저장하지 않는다)
     render();
   });
-  // '추이' 타일은 기본 보기(선택한 지수 하나)로 연다. 겹쳐 보기는 '비교 보기'·'두 지수 함께 보기'로만 켠다.
+  // '추이' 타일·'추이 보기'는 기본 보기(선택한 지수 하나)로 연다. 겹쳐 보기는 추이 화면의 '두 지수 함께 보기'로만 켠다.
   app.querySelector<HTMLAnchorElement>('.tile-link[href="#/trend"]')?.addEventListener('click', () => {
     if (state) state.compare = false;
   });
   app.querySelector<HTMLButtonElement>('[data-promo]')?.addEventListener('click', () => {
     if (!state) return;
-    state.compare = true;
+    state.compare = false;
     go('trend');
   });
   // 주요 사건: 고르면 차트에 표시할 사건이 바뀌고, '차트에서 보기'는 그 날짜가 들어가는 가장 짧은 기간으로 추이 화면을 연다

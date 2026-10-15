@@ -75,9 +75,11 @@ export const WEB_COPY = {
   gaugeLabel: '실질 공포탐욕',
   stats: { sentiment: '심리 (CNN)', price: '실질 가격', change: '전일 대비' },
   promoSection: '살펴볼 것',
-  promoTitle: (spx: string, ndx: string): string => `S&P 500 ${spx} · 나스닥 100 ${ndx}`,
-  promoDesc: '두 지수의 공포·탐욕이 어떻게 함께 움직였는지 비교해 보세요.',
-  promoCta: '비교 보기',
+  promoTitle: (index: string, change: string): string => `${index}, 1개월 전보다 ${change}`,
+  promoDesc: (prev: string, prevBand: string, now: string, nowBand: string): string =>
+    `1개월 전 ${prev}(${prevBand})에서 지금 ${now}(${nowBand})이에요. 지난 흐름을 차트로 확인해 보세요.`,
+  promoNoHistory: '지난 흐름을 차트로 확인해 보세요.',
+  promoCta: '추이 보기',
   exploreSection: '자세히 보기',
   pages: {
     trend: { title: '추이', desc: '1년·3년·5년·최대, 두 지수 비교' },
