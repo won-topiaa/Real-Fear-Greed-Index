@@ -36,18 +36,22 @@ export function alignFgToTradingDays(
   return out;
 }
 
-const SOURCE_PRIORITY: Record<FgPoint['source'], number> = { own: 3, 'cnn-historical': 2, seed: 1 };
+const SOURCE_PRIORITY: Record<FgPoint['source'], number> = { 'cnn-historical': 3, own: 2, seed: 1 };
 
 /**
- * 날짜 유일 병합. 같은 날짜면 소스 우선순위(own > cnn-historical > seed)가 높은 쪽,
- * 같은 우선순위면 기존 값 유지(첫 관측 불변). 결과는 날짜 오름차순.
+ * 날짜 유일 병합(DESIGN §3.3). 같은 날짜면 소스 우선순위(cnn-historical > own > seed)가 높은 쪽.
+ * cnn-historical 끼리는 새로 받은 값이 이긴다 — CNN 은 그날 값을 다음 날 새벽(ET)에 확정하므로 마감 직후 값은 잠정치다
+ * (2026-10-14: 마감 뒤 32.4 → 확정 30.1). own·seed 끼리는 기존 값 유지. 결과는 날짜 오름차순.
  */
 export function mergeFgHistory(existing: readonly FgPoint[], incoming: readonly FgPoint[]): FgPoint[] {
   const byDate = new Map<IsoDate, FgPoint>();
   for (const p of existing) byDate.set(p.date, p);
   for (const p of incoming) {
     const cur = byDate.get(p.date);
-    if (cur == null || SOURCE_PRIORITY[p.source] > SOURCE_PRIORITY[cur.source]) byDate.set(p.date, p);
+    const rank = SOURCE_PRIORITY[p.source];
+    if (cur == null || rank > SOURCE_PRIORITY[cur.source] || (rank === SOURCE_PRIORITY[cur.source] && p.source === 'cnn-historical')) {
+      byDate.set(p.date, p);
+    }
   }
   return [...byDate.values()].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 }

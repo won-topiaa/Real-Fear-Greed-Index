@@ -16,14 +16,13 @@ function ctx(fetchImpl: typeof fetch, now = '2026-09-11T22:30:00Z'): Ctx {
   return { fetchImpl, env: DEFAULT_ENV, nowUtcMs: Date.parse(now), log: collectingLogger(), timeoutMs: 1000, retries: 0 };
 }
 
-test('마감 후 관측한 현재값을 기대 거래일의 own 으로 기록하고 historical 은 백필', async () => {
+test('CNN 이력에 기대 거래일이 없으면 마감 후 현재값을 own 으로 채우고, 이력이 생기면 그 값으로 바꾼다', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'rfg-fg-'));
   try {
     const store = new FileStore(dir);
     const hist: FgPoint[] = [
       { date: '2026-09-09', value: 40, source: 'cnn-historical' },
       { date: '2026-09-10', value: 43, source: 'cnn-historical' },
-      { date: '2026-09-11', value: 44, source: 'cnn-historical' }, // 같은 날짜: own 이 이긴다
     ];
     const f = fakeFetch([{ match: (u) => u.includes('cnn.io'), body: cnnJson(hist, { score: 41.2, timestamp: '2026-09-11T23:59:58+00:00' }) }]);
     const r = await collectFg(ctx(f), store, '2026-09-11');
@@ -37,10 +36,58 @@ test('마감 후 관측한 현재값을 기대 거래일의 own 으로 기록하
     ]);
     assert.equal((await store.readFgHistory()).length, 3);
 
-    // 다음날 다시 돌면 첫 관측 유지(정정 무시)
-    const f2 = fakeFetch([{ match: (u) => u.includes('cnn.io'), body: cnnJson(hist, { score: 55 }) }]);
-    const r2 = await collectFg(ctx(f2, '2026-09-12T22:30:00Z'), store, '2026-09-11');
-    assert.equal(r2.history.find((p) => p.date === '2026-09-11')?.value, 41.2);
+    // 다음 실행: CNN 이 09-11 을 확정했으면 own 대신 그 값을 쓴다
+    const f2 = fakeFetch([
+      { match: (u) => u.includes('cnn.io'), body: cnnJson([...hist, { date: '2026-09-11', value: 39.5, source: 'cnn-historical' }], { score: 55 }) },
+    ]);
+    const r2 = await collectFg(ctx(f2, '2026-09-12T10:00:00Z'), store, '2026-09-11');
+    assert.deepEqual(r2.history.find((p) => p.date === '2026-09-11'), { date: '2026-09-11', value: 39.5, source: 'cnn-historical' });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('CNN 이 다음 날 새벽 확정한 값으로 이전 실행의 잠정치를 바꾸고, 마감 전 날짜의 점은 받지 않는다', async () => {
+  // 2026-10-14 실측: 00:42Z(20:42 ET) 실행이 본 10-14 값 32.42 → CNN 확정 30.14.
+  // 05:34Z 실행에는 UTC 자정이 지나 생긴 10-15 점(값은 10-14 것)이 있었다.
+  const dir = await mkdtemp(join(tmpdir(), 'rfg-fg-'));
+  try {
+    const store = new FileStore(dir);
+    const d13: FgPoint = { date: '2026-10-13', value: 44.11, source: 'cnn-historical' };
+    const first = fakeFetch([
+      { match: (u) => u.includes('cnn.io'), body: cnnJson([d13, { date: '2026-10-14', value: 32.42, source: 'cnn-historical' }], { score: 32.42, timestamp: '2026-10-15T00:42:00+00:00' }) },
+    ]);
+    const r1 = await collectFg(ctx(first, '2026-10-15T00:42:57Z'), store, '2026-10-14');
+    assert.equal(r1.history.find((p) => p.date === '2026-10-14')?.value, 32.42);
+
+    const early = fakeFetch([
+      {
+        match: (u) => u.includes('cnn.io'),
+        body: cnnJson(
+          [d13, { date: '2026-10-14', value: 32.33, source: 'cnn-historical' }, { date: '2026-10-15', value: 32.33, source: 'cnn-historical' }],
+          { score: 32.33, timestamp: '2026-10-15T00:00:00+00:00' },
+        ),
+      },
+    ]);
+    const r2 = await collectFg(ctx(early, '2026-10-15T05:34:58Z'), store, '2026-10-14');
+    assert.equal(r2.history.some((p) => p.date === '2026-10-15'), false);
+
+    const finalized = fakeFetch([
+      {
+        match: (u) => u.includes('cnn.io'),
+        body: cnnJson(
+          [d13, { date: '2026-10-14', value: 30.14, source: 'cnn-historical' }, { date: '2026-10-15', value: 29.91, source: 'cnn-historical' }],
+          { score: 29.91, timestamp: '2026-10-15T08:05:31+00:00' },
+        ),
+      },
+    ]);
+    const r3 = await collectFg(ctx(finalized, '2026-10-15T08:10:00Z'), store, '2026-10-14');
+    assert.deepEqual(r3.flags, ['fg-date-mismatch']);
+    assert.deepEqual(r3.history.map((p) => [p.date, p.value]), [
+      ['2026-10-13', 44.11],
+      ['2026-10-14', 30.14],
+    ]);
+    assert.deepEqual(await store.readFgHistory(), r3.history);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

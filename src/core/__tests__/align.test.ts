@@ -41,28 +41,38 @@ describe('alignFgToTradingDays — as-of 조인 (DESIGN §3.4)', () => {
   });
 });
 
-describe('mergeFgHistory — 날짜 유일, own > cnn-historical > seed, 같은 소스면 기존 값 유지', () => {
-  test('own 이 cnn-historical 을 대체하고, cnn-historical 은 own 을 대체하지 못한다', () => {
+describe('mergeFgHistory — 날짜 유일, cnn-historical(새 값) > own > seed', () => {
+  test('cnn-historical 이 own 을 대체하고, own 은 cnn-historical 을 대체하지 못한다', () => {
     const existing: FgPoint[] = [
       { date: '2026-09-10', value: 40, source: 'cnn-historical' },
       { date: '2026-09-11', value: 42, source: 'own' },
     ];
     const incoming: FgPoint[] = [
       { date: '2026-09-10', value: 41, source: 'own' },
-      { date: '2026-09-11', value: 99, source: 'cnn-historical' },
+      { date: '2026-09-11', value: 39, source: 'cnn-historical' },
       { date: '2026-09-09', value: 38, source: 'cnn-historical' },
     ];
     const merged = mergeFgHistory(existing, incoming);
     expect(merged.map((p) => p.date)).toEqual(['2026-09-09', '2026-09-10', '2026-09-11']);
-    expect(merged[1]).toEqual({ date: '2026-09-10', value: 41, source: 'own' });
-    expect(merged[2]?.value).toBe(42);
+    expect(merged[1]).toEqual({ date: '2026-09-10', value: 40, source: 'cnn-historical' });
+    expect(merged[2]).toEqual({ date: '2026-09-11', value: 39, source: 'cnn-historical' });
   });
 
-  test('같은 소스의 같은 날짜는 첫 관측을 유지한다(정정은 무시)', () => {
+  test('cnn-historical 끼리는 새로 받은 값(CNN 확정값)이 이긴다', () => {
+    // 2026-10-14 실측: 마감 뒤 잡이 본 값 32.42, CNN 이 다음 날 새벽 확정한 값 30.14
     const merged = mergeFgHistory(
-      [{ date: '2026-09-10', value: 40, source: 'own' }],
-      [{ date: '2026-09-10', value: 45, source: 'own' }],
+      [{ date: '2026-10-14', value: 32.42, source: 'cnn-historical' }],
+      [{ date: '2026-10-14', value: 30.14, source: 'cnn-historical' }],
     );
-    expect(merged).toEqual([{ date: '2026-09-10', value: 40, source: 'own' }]);
+    expect(merged).toEqual([{ date: '2026-10-14', value: 30.14, source: 'cnn-historical' }]);
+  });
+
+  test('own·seed 끼리는 기존 값을 유지한다', () => {
+    expect(
+      mergeFgHistory([{ date: '2026-09-10', value: 40, source: 'own' }], [{ date: '2026-09-10', value: 45, source: 'own' }]),
+    ).toEqual([{ date: '2026-09-10', value: 40, source: 'own' }]);
+    expect(
+      mergeFgHistory([{ date: '2026-09-10', value: 40, source: 'seed' }], [{ date: '2026-09-10', value: 45, source: 'own' }]),
+    ).toEqual([{ date: '2026-09-10', value: 45, source: 'own' }]);
   });
 });

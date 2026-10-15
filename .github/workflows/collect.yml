@@ -42,13 +42,14 @@ jobs:
           cache-dependency-path: proxy/package-lock.json
       - run: npm ci
       # 관측 누적(fg/history.json)과 소스 캐시를 실행 간에 유지한다. 실패한 실행의 관측값도 남겨야 하므로 restore/save 를 분리해 항상 저장한다.
+      # v2: FG 병합 규칙 변경(CNN 확정값 우선, 2026-10-15) — 예전 캐시의 잠정치를 버리고 CNN 이력을 처음부터 다시 받는다.
       - uses: actions/cache/restore@v4
         id: restore-cache
         with:
           path: proxy/.cache
-          key: rfg-cache-${{ github.run_id }}
+          key: rfg-cache-v2-${{ github.run_id }}
           restore-keys: |
-            rfg-cache-
+            rfg-cache-v2-
       - name: Download previous publish (for partial fallback)
         continue-on-error: true
         run: |
@@ -69,7 +70,7 @@ jobs:
         if: always()
         with:
           path: proxy/.cache
-          key: rfg-cache-${{ github.run_id }}
+          key: rfg-cache-v2-${{ github.run_id }}
       # 웹 화면(web/ → index.html·app.js·style.css). 수집이 실패한 날에도 화면은 이전 데이터로 게시한다.
       - name: Build web
         if: always()

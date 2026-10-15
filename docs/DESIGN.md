@@ -147,11 +147,11 @@ CNN은 장중에도 값을 갱신하므로 "거래일 t의 FG_t"를 정의해야
 
 | 규칙 | 내용 |
 |---|---|
-| 정의 | **FG_t = 거래일 t의 미국 정규장 마감(16:00 ET) 이후 잡이 처음 관측한 CNN 현재값.** 잡은 22:30 UTC(EDT 18:30 / EST 17:30)에 돈다 |
-| 기록 | `fg/history.json`에 `{date: t, value, observedAtUtc, source: 'own'}` append. **한 날짜에 한 값, 첫 관측을 유지**(불변). 같은 날짜의 다른 값이 나중에 보이면 `revision` 경고만 |
-| 백필 | 첫 실행과 결측 보충에만 `fear_and_greed_historical`을 쓴다. `x`(epoch ms)를 ET 날짜로 바꾼다. `x % 86_400_000 === 0`이면 UTC 자정 기준 날짜, 아니면 ET 변환. 실응답 확인(2026-10-15): 과거 점은 UTC 자정, 마지막 점만 장중 시각. `graphdata/<YYYY-MM-DD>` 로 2020-07-15 이후 이력을 받을 수 있다(그 이전은 500). 수집기는 저장 이력이 2020-07-15 근처까지 없거나 최근이 비었으면 그날부터 전부, 아니면 최근 30일만 요청한다(`cnnRequestStart`). `source: 'cnn-historical'` |
-| 우선순위 | `own` > `cnn-historical` > `seed`(외부 CSV, v1 미사용) |
-| 교차 확인 | 응답에 `timestamp`가 있으면 그 ET 날짜가 t와 다를 때 `fg-date-mismatch` 플래그를 달고 **그 현재값은 `own`으로 남기지 않는다**(t 값은 historical 로). 장중 실행이나 Actions 지연으로 다음 거래일의 장중 값이 t 의 마감 값을 영구히 덮어쓰던 버그(2026-10-14 실측)를 막는다. 실응답에 `timestamp` 필드가 있음을 확인(2026-10-15) |
+| 정의 | **FG_t = CNN 이력(`fear_and_greed_historical`)의 거래일 t 값. 매 실행 새로 받은 값으로 바꾼다.** CNN 은 t 의 값을 다음 날 새벽(2026-10-15 실측 01:34–03:57 ET 사이)에 확정하므로, 마감 직후 실행이 본 값은 잠정치이고 다음 실행에서 확정값으로 바뀐다(2026-10-14 실측: 마감 뒤 32.42 → 확정 30.14. 이 규칙 전에는 첫 관측을 고정해 공개 60거래일 중 23일이 CNN 확정값과 최대 8.8 달랐다). 연구(`research/`)도 CNN 확정 이력으로 했다 |
+| 기록 | `fg/history.json` 에 날짜당 한 값. CNN 이력에 t 가 아직 없을 때만 마감 후 관측한 현재값을 `{date: t, value, observedAtUtc, source: 'own'}` 으로 채우고, 이력이 생기면 그 값으로 바꾼다. **기대 거래일보다 뒤 날짜의 점은 받지 않는다** — CNN 은 UTC 자정이 지나면 다음 날짜 점을 미리 만들고 값은 직전 거래일 것이다 |
+| 이력 | `x`(epoch ms)를 ET 날짜로 바꾼다. `x % 86_400_000 === 0`이면 UTC 자정 기준 날짜, 아니면 ET 변환. 실응답 확인(2026-10-15): 과거 점은 UTC 자정, 마지막 점만 장중 시각. `graphdata/<YYYY-MM-DD>` 로 2020-07-15 이후 이력을 받을 수 있다(그 이전은 500). 수집기는 저장 이력이 2020-07-15 근처까지 없거나 최근이 비었으면 그날부터 전부, 아니면 최근 30일만 요청한다(`cnnRequestStart`) — 확정은 다음 날 새벽이라 30일 창으로 충분하다. `source: 'cnn-historical'` |
+| 우선순위 | `cnn-historical`(새로 받은 값이 이김) > `own`(기존 값 유지) > `seed`(외부 CSV, v1 미사용) |
+| 교차 확인 | 응답에 `timestamp`가 있으면 그 ET 날짜가 t와 다를 때 `fg-date-mismatch` 플래그를 달고 **그 현재값은 `own`으로 남기지 않는다**(t 값은 historical 로). 장중 실행이나 Actions 지연으로 다음 거래일의 장중 값이 t 의 값으로 들어가던 버그(2026-10-14 실측)를 막는다. 실응답에 `timestamp` 필드가 있음을 확인(2026-10-15) |
 | 절차 | **M2의 0번 작업** = 로컬에서 inspect 스크립트 1회 실행 → 실응답의 필드 형태만 남기고 히스토리를 30일로 잘라 픽스처로 커밋(라이선스 최소화) |
 
 ### 3.4 달력·정렬·결측 규칙
@@ -392,7 +392,7 @@ export function computePriceDamage(prices: readonly PricePoint[], p?: RfgParams)
 // ── align.ts ──────────────────────────────────────────────────────────────
 export interface AlignedFg { fg: number | null; fgDate: IsoDate | null; fgStaleDays: number | null }
 export function alignFgToTradingDays(tradingDates: readonly IsoDate[], fg: readonly FgPoint[], maxStalenessDays: number): AlignedFg[];
-export function mergeFgHistory(existing: readonly FgPoint[], incoming: readonly FgPoint[]): FgPoint[]; // 날짜 유일, own > cnn-historical > seed, 기존 값 유지
+export function mergeFgHistory(existing: readonly FgPoint[], incoming: readonly FgPoint[]): FgPoint[]; // 날짜 유일, cnn-historical(새 값) > own > seed
 
 // ── rfg.ts ────────────────────────────────────────────────────────────────
 export function fearFromFg(fg: number): number;
@@ -701,7 +701,7 @@ GitHub Pages 는 `_headers` 를 읽지 않아 캐시는 기본값(`max-age=600`)
 ```
 collect:
   1. expected = expectedLatestTradingDate(now)
-  2. cnn ← fetch/parse/validate → fg 관측 append(첫 관측 유지) → 실패 시 history 마지막 값(신선도 게이트 안) → 그래도 없으면 fg=null
+  2. cnn ← fetch/parse/validate → fg 이력 병합(CNN 이력 새 값 우선, 기대 거래일 뒤 점 제외) → 실패 시 history 마지막 값(신선도 게이트 안) → 그래도 없으면 fg=null
   3. 지수별: price.select() (§3.2) → 없으면 그 지수는 이전 스냅샷 유지, result='partial'
   4. rows = computeRfgSeries(prices, fgHistory) ; 검증: 종가 ≥ 1570, 마지막 행 date == expected
   5. snapshot = buildSnapshot(...) ; parseSnapshot(snapshot).ok 아니면 게시 중단(버그)
@@ -803,7 +803,7 @@ collect:
 |---|---|
 | `core/__tests__/series.test.ts` | 위 표 r/DD/DISP/RV(1e−6); 창 미달 null; `rollingPercentileRank`: 단조 증가 → 100, 감소 → 0, 전부 동률 → 50, 창 안 null → null, midrank/(W−1) 정확식, 표의 성분별 백분위 열 |
 | `rfg.test.ts` | 표의 P/RFG/FRM; `assertParams` 위반 throw; `minClosesRequired()==1511`, `minClosesForSnapshot()==1570` == `DATA_GATES`; `emaSkipNull`(결측 유지), EMA 적용 시 RFG 만 바뀜 |
-| `align.test.ts` | 토요일 관측 FG가 월요일 행에 붙고 `fgStaleDays=2`; 6일 공백 → null; 휴장일 FG는 행 없음; `mergeFgHistory` 우선순위·기존 값 유지 |
+| `align.test.ts` | 토요일 관측 FG가 월요일 행에 붙고 `fgStaleDays=2`; 6일 공백 → null; 휴장일 FG는 행 없음; `mergeFgHistory` 우선순위·CNN 확정값으로 교체 |
 | `classify.test.ts` | 사분면 경계 8개(±0.5 반올림 케이스 포함), NEUTRAL, rfgZone 20/80 경계, frmZone 0.5/1.5 경계(1.495/1.505), `Fear<10` → SUPPRESSED·risk=false, 결측 → UNKNOWN·시그널 false, BUY 두 조건 각각, RISK |
 | `round.test.ts` | `roundTo` 반올림 규칙, 음수, `roundForDisplay` null 전파 |
 | `validate.test.ts` | 역순, 중복, `.`값, 26% 갭, 12일 공백, 교차검증 0.1% |
