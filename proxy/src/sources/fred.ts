@@ -8,7 +8,8 @@ import type { IndexSymbol, PricePoint } from '../../../src/core/types';
 import type { Env, PriceAdapter } from '../types';
 
 export const FRED_SERIES: Record<IndexSymbol, string> = { SPX: 'SP500', NDX: 'NASDAQ100' };
-const LOOKBACK_DAYS = 365 * 12;
+/** NASDAQ100 은 장기 이력이 있다: P 워밍업(MIN_CLOSES 1511 ≈ 6년) 뒤 CNN 이력 시작(2020-07)부터 RFG 가 나오도록 13년. SP500 은 FRED 가 10년만 준다. */
+const LOOKBACK_DAYS = 365 * 13;
 
 export class FredSchemaError extends Error {
   constructor(public readonly path: string) {

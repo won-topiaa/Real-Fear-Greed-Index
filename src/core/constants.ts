@@ -96,8 +96,11 @@ export const DISPLAY_BANDS = [
 /** 웹의 과거 값 비교(거래일 전): 전일·1주·1개월·1년. 표시 전용 */
 export const COMPARE_OFFSETS = { prev: 1, week: 5, month: 21, year: 252 } as const;
 
-/** 공개 1년 이력(history.json)의 길이(거래일). 1년 전 비교(252거래일 전)를 담고 남는 여유. 보고서 외 */
-export const HISTORY_LONG_DAYS = 260;
+/** 공개 이력(history.json)의 최대 길이(거래일, 약 10년). RFG 가 처음 계산되는 날부터 싣고 그 앞은 자른다. 보고서 외 */
+export const HISTORY_MAX_DAYS = 2520;
+
+/** 웹 추이 차트의 기간 버튼(거래일). '최대'는 이력 전체 */
+export const CHART_RANGES = { y1: 252, y3: 756, y5: 1260 } as const;
 
 export const DISPLAY_DIGITS = {
   /** FG, Fear, P, RFG — 정수 */

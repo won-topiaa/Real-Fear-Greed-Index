@@ -1,5 +1,5 @@
 import { isIsoDate } from './calendar';
-import { HISTORY_LONG_DAYS } from './constants';
+import { HISTORY_MAX_DAYS } from './constants';
 import type { ComponentSeries } from './damage';
 import { roundTo } from './round';
 import type { ComponentsBlock, HistoryRow, IndexSymbol, IsoDate, RfgHistory, RfgRow } from './types';
@@ -17,11 +17,12 @@ export interface BuildHistoryInput {
 }
 
 /**
- * RFG 행 → 공개 1년 이력(GET /v1/history.json). DESIGN §3.6 에 따라 CNN 원값(fg, fear)은 싣지 않고 RFG·P 만 싣는다.
+ * RFG 행 → 공개 이력(GET /v1/history.json). DESIGN §3.6 에 따라 CNN 원값(fg, fear)은 싣지 않고 RFG·P 만 싣는다.
+ * 최근 days 행 가운데 RFG 가 처음 계산된 행부터 싣는다(앞쪽 결측은 자른다).
  * components 는 최신 행의 세부 지표(원시값은 비율 그대로, 백분위는 소수 2자리).
  */
 export function buildHistory(input: BuildHistoryInput): RfgHistory {
-  const days = input.days ?? HISTORY_LONG_DAYS;
+  const days = input.days ?? HISTORY_MAX_DAYS;
   const markets = {} as RfgHistory['markets'];
   for (const sym of SYMBOLS) {
     const rows = input.rows[sym];
@@ -30,8 +31,10 @@ export function buildHistory(input: BuildHistoryInput): RfgHistory {
     if (lastRow == null) throw new Error(`[buildHistory] no rows for ${sym}`);
     const c = input.components[sym];
     const at = <T,>(xs: readonly (T | null)[]): T | null => xs[last] ?? null;
+    let start = Math.max(0, rows.length - days);
+    while (start < last && rows[start]?.rfg == null) start++;
     markets[sym] = {
-      rows: rows.slice(Math.max(0, rows.length - days)).map((r) => ({ date: r.date, rfg: r2(r.rfg), p: r2(r.p) })),
+      rows: rows.slice(start).map((r) => ({ date: r.date, rfg: r2(r.rfg), p: r2(r.p) })),
       components: {
         date: lastRow.date,
         dd: at(c.dd),

@@ -424,3 +424,20 @@ th {
   justify-content: flex-start;
   margin: 4px 0 10px;
 }
+
+/* 카드 머리: 제목 + 기간 버튼 */
+.card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.card-head h2 {
+  margin: 0;
+}
+.switch.small button {
+  font-size: 13px;
+  padding: 4px 12px;
+  min-height: 32px;
+}

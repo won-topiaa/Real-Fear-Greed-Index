@@ -149,7 +149,7 @@ CNN은 장중에도 값을 갱신하므로 "거래일 t의 FG_t"를 정의해야
 |---|---|
 | 정의 | **FG_t = 거래일 t의 미국 정규장 마감(16:00 ET) 이후 잡이 처음 관측한 CNN 현재값.** 잡은 22:30 UTC(EDT 18:30 / EST 17:30)에 돈다 |
 | 기록 | `fg/history.json`에 `{date: t, value, observedAtUtc, source: 'own'}` append. **한 날짜에 한 값, 첫 관측을 유지**(불변). 같은 날짜의 다른 값이 나중에 보이면 `revision` 경고만 |
-| 백필 | 첫 실행과 결측 보충에만 `fear_and_greed_historical`을 쓴다. `x`(epoch ms)를 ET 날짜로 바꾼다. `x % 86_400_000 === 0`이면 UTC 자정 기준 날짜, 아니면 ET 변환. 실응답 확인(2026-10-15): 과거 점은 UTC 자정, 마지막 점만 장중 시각. `graphdata/<YYYY-MM-DD>` 로 2020-07-15 이후 이력을 받을 수 있다(그 이전은 500). `source: 'cnn-historical'` |
+| 백필 | 첫 실행과 결측 보충에만 `fear_and_greed_historical`을 쓴다. `x`(epoch ms)를 ET 날짜로 바꾼다. `x % 86_400_000 === 0`이면 UTC 자정 기준 날짜, 아니면 ET 변환. 실응답 확인(2026-10-15): 과거 점은 UTC 자정, 마지막 점만 장중 시각. `graphdata/<YYYY-MM-DD>` 로 2020-07-15 이후 이력을 받을 수 있다(그 이전은 500). 수집기는 저장 이력이 2020-07-15 근처까지 없거나 최근이 비었으면 그날부터 전부, 아니면 최근 30일만 요청한다(`cnnRequestStart`). `source: 'cnn-historical'` |
 | 우선순위 | `own` > `cnn-historical` > `seed`(외부 CSV, v1 미사용) |
 | 교차 확인 | 응답에 `timestamp`가 있으면 그 ET 날짜가 t와 다를 때 `fg-date-mismatch` 플래그를 달고 **그 현재값은 `own`으로 남기지 않는다**(t 값은 historical 로). 장중 실행이나 Actions 지연으로 다음 거래일의 장중 값이 t 의 마감 값을 영구히 덮어쓰던 버그(2026-10-14 실측)를 막는다. 실응답에 `timestamp` 필드가 있음을 확인(2026-10-15) |
 | 절차 | **M2의 0번 작업** = 로컬에서 inspect 스크립트 1회 실행 → 실응답의 필드 형태만 남기고 히스토리를 30일로 잘라 픽스처로 커밋(라이선스 최소화) |
@@ -184,7 +184,7 @@ CNN은 장중에도 값을 갱신하므로 "거래일 t의 FG_t"를 정의해야
 ### 3.6 공개 범위(라이선스 최소화)
 
 - 스냅샷에는 **당일 FG 1개 + 60거래일 히스토리(rfg/p/fear만)** 를 싣는다. CNN 원문 히스토리 전체를 미러링·공개하지 않는다.
-- 웹 화면용 `history.json` 에는 **RFG·P 의 1년(260거래일) 이력만** 싣는다. CNN 원값(FG·Fear)의 이력은 싣지 않는다(당일 FG 는 스냅샷과 같이 1개).
+- 웹 화면용 `history.json` 에는 **RFG·P 이력만**(RFG 가 처음 계산된 날부터, 최대 10년 = `HISTORY_MAX_DAYS`) 싣는다. CNN 원값(FG·Fear)의 이력은 싣지 않는다(당일 FG 는 스냅샷과 같이 1개).
 - **원시 종가(`close`)는 스냅샷에 싣지 않는다.** 앱은 DD/DISP/RV 파생값만 필요하다(S&P DJI 지수값 재배포 회피).
 - 출처는 정보 화면에 "비공식 경로로 수집, 참고용"으로 명시한다. 숨기지 않는다.
 
@@ -667,8 +667,8 @@ proxy/
 |---|---|---|
 | `GET /v1/snapshot.json` | `RfgSnapshot`(§5). 두 지수 포함, 요청 1회 | `public, max-age=600, stale-while-revalidate=86400` |
 | `GET /v1/status.json` | 아래 | `max-age=60` |
-| `GET /v1/history.json` | `RfgHistory`(`src/core/history.ts`): 지수별 1년 `{date, rfg, p}` + 최신 세부 지표(DD·DISP·RV 와 성분별 백분위). 두 지수가 모두 새로 계산된 날에만 바뀐다 | 스냅샷과 같음 |
-| `GET /` | 웹 화면(`web/` → `index.html`·`app.js`·`style.css`, 2026-10-15). CNN 스타일 5구간 게이지·과거 값·1년 추이·구성 요소. `src/core`·`src/text` 를 번들 | `max-age=300` |
+| `GET /v1/history.json` | `RfgHistory`(`src/core/history.ts`): 지수별 `{date, rfg, p}`(RFG 첫 계산일부터, 최대 10년 — NDX 2020-07-15~, SPX 2022-10~) + 최신 세부 지표(DD·DISP·RV 와 성분별 백분위). 두 지수가 모두 새로 계산된 날에만 바뀐다. 공백 없는 JSON | 스냅샷과 같음 |
+| `GET /` | 웹 화면(`web/` → `index.html`·`app.js`·`style.css`, 2026-10-15). CNN 스타일 5구간 게이지·색 안내·과거 값·추이(1년·3년·5년·최대)·구성 요소. `src/core`·`src/text` 를 번들 | `max-age=300` |
 | `GET /static/icon.png` | 앱 아이콘 512×512 (`brand.icon` URL) | 길게 |
 
 캐시 헤더는 파이프라인이 `public/_headers`(Cloudflare `_headers` 형식 — Workers 정적 자산도 같은 형식을 읽는다)로 함께 게시한다. 실패한 실행도 `status.json` 과 `_headers` 는 게시된다(`snapshot.json` 은 검증 통과 시에만 바뀜).

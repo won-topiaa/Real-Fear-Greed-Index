@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import { DEFAULT_ENV } from '../src/env';
 import { collectingLogger } from '../src/log';
 import { collectFg } from '../src/sources/fg';
+import { CNN_EARLIEST, cnnRequestStart, cnnUrl } from '../src/sources/cnn';
 import { FileStore } from '../src/store/FileStore';
 import { cnnJson, fakeFetch } from '../src/synth';
 import type { Ctx } from '../src/types';
@@ -109,4 +110,13 @@ test('범위 밖 값은 실패로 취급하고 저장하지 않는다', async ()
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test('CNN 요청 시작일: 이력이 없거나 앞·뒤가 비면 2020-07-15 부터 전부, 온전하면 최근 30일만', () => {
+  const pt = (date: string): FgPoint => ({ date, value: 50, source: 'cnn-historical' });
+  assert.equal(cnnRequestStart([], '2026-10-14'), CNN_EARLIEST);
+  assert.equal(cnnRequestStart([pt('2024-10-14'), pt('2026-10-13')], '2026-10-14'), CNN_EARLIEST); // 앞이 비었다
+  assert.equal(cnnRequestStart([pt('2020-07-15'), pt('2026-08-01')], '2026-10-14'), CNN_EARLIEST); // 최근이 비었다
+  assert.equal(cnnRequestStart([pt('2020-07-15'), pt('2026-10-13')], '2026-10-14'), '2026-09-14');
+  assert.equal(cnnUrl('2019-01-01').endsWith(`/graphdata/${CNN_EARLIEST}`), true); // 그 이전은 500 이라 당긴다
 });

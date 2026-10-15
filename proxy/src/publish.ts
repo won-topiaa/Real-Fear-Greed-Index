@@ -75,7 +75,7 @@ export async function publishSnapshot(outDir: string, snapshot: RfgSnapshot): Pr
 export async function publishHistory(outDir: string, history: RfgHistory): Promise<void> {
   const r = parseHistory(JSON.parse(JSON.stringify(history)));
   if (!r.ok) throw new Error(`[publish] history failed self-validation at ${r.error.path}`);
-  await writeJsonAtomic(join(outDir, HISTORY_PATH), history);
+  await writeJsonAtomic(join(outDir, HISTORY_PATH), history, { compact: true });
 }
 
 export async function writeStatus(outDir: string, status: StatusJson): Promise<void> {

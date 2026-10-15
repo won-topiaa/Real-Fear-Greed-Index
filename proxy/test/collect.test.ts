@@ -13,7 +13,7 @@ import { makeScenario, SCENARIO_NOW_UTC } from '../src/synth/scenarios';
 import { classify } from '../../src/core/classify';
 import { parseSnapshot } from '../../src/core/snapshot';
 import { parseHistory } from '../../src/core/history';
-import { HISTORY_LONG_DAYS } from '../../src/core/constants';
+import { HISTORY_MAX_DAYS } from '../../src/core/constants';
 import type { StatusJson } from '../src/publish';
 
 const GOLDEN_PATH = new URL('./golden/snapshot.json', import.meta.url);
@@ -71,12 +71,13 @@ test('e2e: 합성 소스 → 스냅샷이 골든과 일치하고 parseSnapshot �
     assert.equal(status.result, 'ok');
     assert.equal(status.published.unchanged, false);
     assert.deepEqual(status.published.markets, { SPX: 'new', NDX: 'new' });
-    // 1년 이력: 계약 통과, HISTORY_LONG_DAYS 행, RFG·P 만(CNN 원값 없음), 마지막 행 = 스냅샷 최신
+    // 이력: 계약 통과, RFG 가 처음 계산된 행부터(≤ HISTORY_MAX_DAYS), RFG·P 만(CNN 원값 없음), 마지막 행 = 스냅샷 최신
     const history = parseHistory(JSON.parse(await readFile(join(dir, 'public', HISTORY_PATH), 'utf8')));
     assert.ok(history.ok);
     if (history.ok) {
       const spx = history.value.markets.SPX;
-      assert.equal(spx.rows.length, HISTORY_LONG_DAYS);
+      assert.ok(spx.rows.length > 0 && spx.rows.length <= HISTORY_MAX_DAYS);
+      assert.ok(spx.rows[0]?.rfg != null);
       assert.deepEqual(Object.keys(spx.rows[0] ?? {}).sort(), ['date', 'p', 'rfg']);
       assert.equal(spx.rows.at(-1)?.date, r.snapshot?.markets.SPX.closeDate);
       assert.equal(spx.components.date, r.snapshot?.markets.SPX.closeDate);

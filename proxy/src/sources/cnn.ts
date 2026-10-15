@@ -5,18 +5,32 @@
  *     fear_and_greed_historical: { data: [{ x: epoch ms, y: 0..100, rating }] } }
  * 실응답은 `npm run inspect -- --source cnn` 으로 형태만 확인해 test/fixtures 에 30일치로 잘라 저장한다.
  */
-import { nyDateOf } from '../../../src/core/calendar';
+import { addCalendarDays, nyDateOf } from '../../../src/core/calendar';
 import type { FgPoint, IsoDate } from '../../../src/core/types';
 import type { Env } from '../types';
 
 export const CNN_URL = 'https://production.dataviz.cnn.io/index/fearandgreed/graphdata';
 /** 날짜를 붙이면 그날 이후 이력을 준다(없으면 최근 1년). 2020-07-15 이전 날짜는 500 이라 그보다 앞으로는 요청하지 않는다(2026-10-15 실측). */
 export const CNN_EARLIEST = '2020-07-15';
-/** 웹 1년 추이·1년 전 비교가 비지 않도록 기대 거래일보다 이만큼(달력일) 앞부터 받는다 */
-export const CNN_BACKFILL_DAYS = 730;
+/** 저장된 이력이 온전하면 최근 이만큼(달력일)만 받아 이어 붙인다 */
+export const CNN_INCREMENTAL_DAYS = 30;
 
 export function cnnUrl(from: IsoDate): string {
   return `${CNN_URL}/${from < CNN_EARLIEST ? CNN_EARLIEST : from}`;
+}
+
+/**
+ * 요청 시작일. 저장 이력이 없거나, CNN_EARLIEST 근처까지 거슬러 가지 않거나, 최근이 비었으면(캐시 유실·장기 중단)
+ * CNN_EARLIEST 부터 전부 받는다(웹 '최대' 추이용). 아니면 최근 CNN_INCREMENTAL_DAYS 만 받는다.
+ */
+export function cnnRequestStart(previous: readonly FgPoint[], expected: IsoDate): IsoDate {
+  const first = previous[0]?.date;
+  const last = previous[previous.length - 1]?.date;
+  const fullFrom = CNN_EARLIEST;
+  if (first == null || last == null) return fullFrom;
+  if (first > addCalendarDays(CNN_EARLIEST, 14)) return fullFrom;
+  if (last < addCalendarDays(expected, -(CNN_INCREMENTAL_DAYS - 5))) return fullFrom;
+  return addCalendarDays(expected, -CNN_INCREMENTAL_DAYS);
 }
 
 export interface CnnParsed {

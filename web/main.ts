@@ -3,7 +3,7 @@
  * 숫자·문턱·문구는 src/core·src/text 에서만 온다(앱과 같은 모듈을 번들한다). 행동 지시 없이 지수만 보여준다.
  */
 import { bandOf } from '../src/core/classify';
-import { COMPARE_OFFSETS, DISPLAY_BANDS } from '../src/core/constants';
+import { CHART_RANGES, COMPARE_OFFSETS, DISPLAY_BANDS } from '../src/core/constants';
 import { assessFreshness } from '../src/core/freshness';
 import { parseHistory } from '../src/core/history';
 import { parseSnapshot } from '../src/core/snapshot';
@@ -23,14 +23,18 @@ const BAND_COLOR: Record<Band, string> = {
 /** 구간 경계(표시값). 정수 판정과 맞추려고 상한 + 0.5 를 경계로 그린다. */
 const BAND_EDGES: number[] = [0, ...DISPLAY_BANDS.map((b) => Math.min(100, b.max + 0.5))];
 const STORAGE_KEY = 'rfg.index';
-/** 차트에 그릴 거래일 수(약 1년) */
-const CHART_DAYS = COMPARE_OFFSETS.year + 1;
+const RANGE_KEY = 'rfg.range';
+type RangeKey = keyof typeof CHART_RANGES | 'max';
+const RANGE_KEYS: readonly RangeKey[] = ['y1', 'y3', 'y5', 'max'];
+/** 이보다 많은 거래일을 그리면 눈금을 월 대신 연 단위로 */
+const YEARLY_TICKS_AFTER = 520;
 const TABLE_ROWS = 20;
 
 interface State {
   snapshot: RfgSnapshot;
   history: RfgHistory | null;
   index: IndexSymbol;
+  range: RangeKey;
 }
 
 const app = document.getElementById('app') as HTMLElement;
@@ -60,6 +64,31 @@ function saveIndex(i: IndexSymbol): void {
   }
 }
 
+function readRange(): RangeKey {
+  try {
+    const v = localStorage.getItem(RANGE_KEY);
+    if (v && (RANGE_KEYS as readonly string[]).includes(v)) return v as RangeKey;
+  } catch {
+    /* 기본값 */
+  }
+  return 'y1';
+}
+
+function saveRange(r: RangeKey): void {
+  try {
+    localStorage.setItem(RANGE_KEY, r);
+  } catch {
+    /* 무시 */
+  }
+}
+
+/** 선택한 기간의 행. 요청한 기간보다 이력이 짧으면 있는 만큼 그리고, 시작일 안내를 붙인다. */
+function rangeRows(rows: HistoryRow[], range: RangeKey): { rows: HistoryRow[]; short: boolean } {
+  if (range === 'max') return { rows, short: false };
+  const days = CHART_RANGES[range] + 1;
+  return { rows: rows.slice(-days), short: rows.length < days };
+}
+
 async function fetchJson(path: string): Promise<unknown> {
   const res = await fetch(path, { cache: 'no-cache' });
   if (!res.ok) throw new Error(`${path} ${res.status}`);
@@ -73,7 +102,7 @@ async function load(): Promise<void> {
     const snap = parseSnapshot(snapRaw);
     if (!snap.ok) throw new Error(`snapshot ${snap.error.path}`);
     const hist = histRaw == null ? null : parseHistory(histRaw);
-    state = { snapshot: snap.value, history: hist && hist.ok ? hist.value : null, index: readIndex() };
+    state = { snapshot: snap.value, history: hist && hist.ok ? hist.value : null, index: readIndex(), range: readRange() };
     render();
   } catch {
     app.innerHTML = `<p class="state">${esc(WEB_COPY.error)}</p><button class="retry" type="button">${esc(WEB_COPY.retry)}</button>`;
@@ -96,6 +125,8 @@ function render(): void {
   const fresh = assessFreshness(s.snapshot, s.index, Date.now());
   const blocked = fresh.level === 'stale' || latest.rfg == null;
   const rows = seriesFor(s);
+  const ranged = rangeRows(rows, s.range);
+  const startNote = ranged.short || s.range === 'max' ? WEB_COPY.dataStart(formatYmd(rows[0]?.date ?? '')) : '';
 
   let badge = '';
   if (fresh.level === 'delayed') badge = badgeHtml(COPY.freshness('delayed', fresh.tradingDaysBehind), '#fab219');
@@ -118,8 +149,14 @@ function render(): void {
     </section>
     ${blocked ? '' : compareHtml(rows)}
     <section class="card">
-      <h2>${esc(WEB_COPY.chartTitle)} · ${esc(LABELS.index[s.index])}</h2>
+      <div class="card-head">
+        <h2>${esc(WEB_COPY.chartTitle)} · ${esc(LABELS.index[s.index])}</h2>
+        <div class="switch small" role="group" aria-label="${esc(WEB_COPY.rangeLabel)}">
+          ${RANGE_KEYS.map((k) => `<button type="button" data-range="${k}" aria-pressed="${k === s.range}">${esc(WEB_COPY.ranges[k])}</button>`).join('')}
+        </div>
+      </div>
       ${legendHtml('chart-legend')}
+      ${startNote ? `<p class="note">${esc(startNote)}</p>` : ''}
       <div class="chart" id="chart"></div>
       ${tableHtml(rows)}
     </section>
@@ -142,8 +179,19 @@ function render(): void {
     }),
   );
 
+  app.querySelectorAll<HTMLButtonElement>('[data-range]').forEach((b) =>
+    b.addEventListener('click', () => {
+      const r = b.dataset.range as RangeKey | undefined;
+      if (r && RANGE_KEYS.includes(r) && state) {
+        state.range = r;
+        saveRange(r);
+        render();
+      }
+    }),
+  );
+
   const chartEl = document.getElementById('chart') as HTMLElement;
-  const chartRows = rows.slice(-CHART_DAYS);
+  const chartRows = ranged.rows;
   chartObserver?.disconnect();
   let lastWidth = 0;
   chartObserver = new ResizeObserver(() => {
@@ -154,6 +202,12 @@ function render(): void {
     }
   });
   chartObserver.observe(chartEl);
+}
+
+/** '2022-10-21' → '2022년 10월 21일' */
+function formatYmd(d: string): string {
+  const [y, m, day] = d.split('-').map(Number);
+  return y && m && day ? `${y}년 ${m}월 ${day}일` : EMPTY;
 }
 
 function kstText(utc: string): string {
@@ -270,16 +324,18 @@ function drawChart(el: HTMLElement, rows: HistoryRow[]): void {
   const base = `<line x1="${m.l}" x2="${m.l + iw}" y1="${f(y(0))}" y2="${f(y(0))}" stroke="var(--axis)" stroke-width="1"/>`;
   const yTicks = [0, 25, 50, 75, 100].map((v) => `<text class="tick" x="${m.l - 6}" y="${f(y(v) + 4)}" text-anchor="end">${v}</text>`).join('');
 
-  // 월이 바뀌는 첫 거래일에 눈금. 좁으면 격월.
-  const monthStarts: number[] = [];
-  for (let i = 1; i < n; i++) if ((rows[i]?.date ?? '').slice(0, 7) !== (rows[i - 1]?.date ?? '').slice(0, 7)) monthStarts.push(i);
-  const step = width < 520 ? 2 : 1;
-  const xTicks = monthStarts
+  // 기간이 짧으면 월이 바뀌는 첫 거래일(좁으면 격월), 길면 해가 바뀌는 첫 거래일에 눈금
+  const yearly = n > YEARLY_TICKS_AFTER;
+  const key = (d: string): string => (yearly ? d.slice(0, 4) : d.slice(0, 7));
+  const starts: number[] = [];
+  for (let i = 1; i < n; i++) if (key(rows[i]?.date ?? '') !== key(rows[i - 1]?.date ?? '')) starts.push(i);
+  const step = !yearly && width < 520 ? 2 : 1;
+  const xTicks = starts
     .filter((_, k) => k % step === 0)
     .map((i) => {
       const d = rows[i]?.date ?? '';
       const mo = Number(d.slice(5, 7));
-      const text = mo === 1 ? `${d.slice(0, 4)}년` : `${mo}월`;
+      const text = yearly || mo === 1 ? `${d.slice(0, 4)}년` : `${mo}월`;
       return `<line x1="${f(x(i))}" x2="${f(x(i))}" y1="${f(y(0))}" y2="${f(y(0) + 4)}" stroke="var(--axis)"/>
         <text class="tick" x="${f(x(i))}" y="${f(y(0) + 17)}" text-anchor="middle">${text}</text>`;
     })

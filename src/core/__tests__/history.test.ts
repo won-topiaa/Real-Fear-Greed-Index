@@ -45,12 +45,13 @@ describe('buildHistory / parseHistory — 공개 1년 이력 계약', () => {
     days: 6,
   });
 
-  test('최근 days 행만, RFG·P 는 소수 2자리, CNN 원값(fg·fear)은 싣지 않는다', () => {
+  test('최근 days 행 중 RFG 가 처음 계산된 행부터, RFG·P 는 소수 2자리, CNN 원값(fg·fear)은 싣지 않는다', () => {
     const m = history.markets.SPX;
-    expect(m.rows).toHaveLength(6);
-    expect(m.rows[0]?.date).toBe('2026-08-07');
-    expect(m.rows[5]).toEqual({ date: '2026-08-14', rfg: 80, p: 35 });
-    expect(m.rows[2]).toEqual({ date: '2026-08-11', rfg: 57.67, p: 38.33 });
+    // 최근 6행은 t=4..9 인데 t=4,5 는 RFG 결측 → t=6 부터 4행
+    expect(m.rows).toHaveLength(4);
+    expect(m.rows[0]?.date).toBe('2026-08-11');
+    expect(m.rows[3]).toEqual({ date: '2026-08-14', rfg: 80, p: 35 });
+    expect(m.rows[0]).toEqual({ date: '2026-08-11', rfg: 57.67, p: 38.33 });
     expect(Object.keys(m.rows[0] ?? {}).sort()).toEqual(['date', 'p', 'rfg']);
   });
 

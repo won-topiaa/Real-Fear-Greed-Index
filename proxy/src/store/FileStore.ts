@@ -23,8 +23,8 @@ export async function writeTextAtomic(path: string, text: string): Promise<void>
   await rename(tmp, path);
 }
 
-export async function writeJsonAtomic(path: string, value: unknown): Promise<void> {
-  await writeTextAtomic(path, JSON.stringify(value, null, 2) + '\n');
+export async function writeJsonAtomic(path: string, value: unknown, opts: { compact?: boolean } = {}): Promise<void> {
+  await writeTextAtomic(path, (opts.compact ? JSON.stringify(value) : JSON.stringify(value, null, 2)) + '\n');
 }
 
 export class FileStore {
