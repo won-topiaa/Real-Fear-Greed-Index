@@ -176,7 +176,7 @@ Cloudflare Pages 는 Workers 로 통합되는 중이라 wrangler 4.13x 의 `page
 2. GitHub **Secrets**: `FRED_API_KEY`, `CLOUDFLARE_API_TOKEN`(대시보드 → My Profile → API Tokens → "Edit Cloudflare Workers" 템플릿, Account Resources 는 이 계정만), `CLOUDFLARE_ACCOUNT_ID`, `HEALTHCHECKS_PING_URL`.
 3. GitHub **Variables**(선택): `CNN_USER_AGENT`.
 4. `.github/workflows/collect.yml` 을 **수동 실행(workflow_dispatch)** 해 `status-<run>` 아티팩트의 `status.json` 이 `ok` 인지 본다.
-5. healthchecks.io 체크를 만들고(주기 1일, 유예 12시간) 핑 URL 을 Secrets 에 넣는다. GitHub 는 **공개 레포가 60일간 비활성이면 스케줄 워크플로를 끈다** — 이 데드맨 핑이 "잡이 아예 안 돈" 경우를 잡는 유일한 수단이다.
+5. GitHub 는 **공개 레포가 60일간 저장소 활동(커밋 등)이 없으면 스케줄 워크플로를 끈다**(워크플로 실행은 활동이 아니다). collect.yml 의 마지막 단계(keepalive)가 마지막 커밋이 50일을 넘으면 빈 커밋을 push 한다 — 수동 실행에서 `keepalive_days=0` 으로 시험할 수 있다. 추가로 healthchecks.io 체크(주기 1일, 유예 12시간)의 핑 URL 을 Secrets 에 넣으면 "잡이 아예 안 돈" 경우도 알림을 받는다(선택).
 6. 아이콘: 512×512 PNG 를 `proxy/public/static/icon.png` 로 같이 게시하고 `granite.config.ts` 의 `brand.icon` 에 `https://<PAGES_HOST>/static/icon.png` 를 적는다. (게시 산출물에 정적 파일을 포함하도록 collect.yml 의 배포 단계 전에 복사 스텝을 추가한다 — M5.)
 
 Actions 러너 IP 가 CNN 봇 방어에 걸리면(`status.sources[cnn].error = http_403`), 수집기를 집 맥의 launchd 로 옮긴다:
@@ -237,7 +237,7 @@ npm run deploy
 | "심리 데이터를 아직 못 받았어요" | `sources[cnn].error` | `http_403`/`schema` 면 inspect 로 형태 재확인. 히스토리 마지막 값이 5달력일 안이면 자동 폴백 중 |
 | 앱 "업데이트가 필요해요" | 스냅샷 `schemaVersion` 변경 | 의도한 변경이면 앱 재배포. 아니면 파이프라인 롤백 |
 | 홈에 "샘플 데이터" 배지가 배포본에서 보임 | 목 모드로 배포됨 | 즉시 `apiBaseUrl` 채워 재배포. predeploy 를 우회했는지 확인 |
-| healthchecks 알림 | 잡이 안 돌았음 | Actions 스케줄 비활성(60일 비활성) 여부 → 수동 실행 후 레포에 커밋 1건 |
+| healthchecks 알림 | 잡이 안 돌았음 | Actions 스케줄 비활성(60일 비활성) 여부 → 수동 실행 후 레포에 커밋 1건. keepalive 단계 로그(`last commit N days ago`)와 push 경고 확인 |
 
 ---
 
