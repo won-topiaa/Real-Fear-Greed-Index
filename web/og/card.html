@@ -1,0 +1,193 @@
+<!doctype html>
+<!--
+  링크 미리보기 대표 이미지(og:image) 원본. 1200×630 으로 찍어 web/og.png 로 저장한다(build-web 이 public/ 으로 복사).
+  오늘 값이 아니라 고정 디자인이다 — 미리보기는 SNS 가 오래 캐시하므로 숫자를 넣으면 틀린 값이 남는다.
+  다시 만들기(macOS, 저장소 루트에서):
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --hide-scrollbars \
+      --force-device-scale-factor=1 --window-size=1200,630 --user-data-dir="$(mktemp -d)" \
+      --screenshot="$PWD/web/og.png" "file://$PWD/web/og/card.html"
+  색은 web/style.css 의 5구간 토큰과 같다.
+-->
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      :root {
+        --ink: #0b0b0b;
+        --ink-2: #52514e;
+        --muted: #6f6e69;
+        --surface: #fcfcfb;
+        --track: #ecebf2;
+        --b-ef: #b42020;
+        --b-f: #f2766b;
+        --b-n: #a19f97;
+        --b-g: #5b9af2;
+        --b-eg: #1d50b8;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+      html,
+      body {
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+      }
+      body {
+        font-family: 'Apple SD Gothic Neo', system-ui, -apple-system, 'Noto Sans KR', sans-serif;
+        color: var(--ink);
+        background: radial-gradient(1100px 620px at 0% -10%, #ece6ff 0%, rgba(236, 230, 255, 0) 60%),
+          radial-gradient(900px 600px at 100% 0%, #dcefff 0%, rgba(220, 239, 255, 0) 55%),
+          radial-gradient(900px 600px at 50% 105%, #fff0e3 0%, rgba(255, 240, 227, 0) 60%), #f5f6fa;
+        padding: 64px 68px;
+        display: flex;
+        gap: 48px;
+      }
+      .left {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
+      .eyebrow {
+        align-self: flex-start;
+        font-size: 24px;
+        font-weight: 700;
+        color: var(--ink-2);
+        background: rgba(255, 255, 255, 0.75);
+        border: 1px solid rgba(11, 11, 11, 0.08);
+        border-radius: 999px;
+        padding: 8px 18px;
+      }
+      h1 {
+        margin-top: 26px;
+        font-size: 70px;
+        font-weight: 800;
+        letter-spacing: -2px;
+        line-height: 1.08;
+      }
+      .sub {
+        margin-top: 22px;
+        font-size: 31px;
+        font-weight: 600;
+        line-height: 1.4;
+        color: var(--ink-2);
+      }
+      .chips {
+        margin-top: 22px;
+        display: flex;
+        gap: 10px;
+      }
+      .chips span {
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--ink-2);
+        background: rgba(255, 255, 255, 0.75);
+        border: 1px solid rgba(11, 11, 11, 0.08);
+        border-radius: 12px;
+        padding: 7px 14px;
+      }
+      .foot {
+        margin-top: auto;
+        font-size: 22px;
+        line-height: 1.5;
+        color: var(--muted);
+      }
+      .foot b {
+        color: var(--ink);
+        font-weight: 700;
+      }
+      .card {
+        width: 420px;
+        align-self: center;
+        background: var(--surface);
+        border-radius: 28px;
+        box-shadow: 0 14px 40px rgba(31, 35, 70, 0.1);
+        padding: 30px 32px 28px;
+      }
+      .card svg {
+        display: block;
+        margin: 0 auto;
+      }
+      .legend {
+        margin-top: 14px;
+        display: grid;
+        gap: 9px;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 22px;
+        font-weight: 600;
+      }
+      .dot {
+        width: 18px;
+        height: 18px;
+        border-radius: 6px;
+        flex: none;
+      }
+      .range {
+        margin-left: auto;
+        font-weight: 500;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="left">
+      <span class="eyebrow">S&amp;P 500 · 나스닥 100</span>
+      <h1>실질 공포·탐욕 지수</h1>
+      <p class="sub">CNN 공포·탐욕 지수(심리)에<br />실제 가격 훼손을 더했어요</p>
+      <div class="chips"><span>1년 고점 대비 낙폭</span><span>200일선 이격</span><span>변동성</span></div>
+      <p class="foot">
+        <b>미국 장 마감 후 하루 한 번 갱신 · 무료</b><br />
+        CNN과 무관한 개인 프로젝트 · 투자 권유가 아닌 참고용
+      </p>
+    </div>
+    <div class="card">
+      <svg id="gauge" width="356" height="196" viewBox="0 0 356 196" aria-hidden="true"></svg>
+      <div class="legend">
+        <div class="row"><span class="dot" style="background: var(--b-ef)"></span>극단적 공포<span class="range">0–24</span></div>
+        <div class="row"><span class="dot" style="background: var(--b-f)"></span>공포<span class="range">25–44</span></div>
+        <div class="row"><span class="dot" style="background: var(--b-n)"></span>중립<span class="range">45–55</span></div>
+        <div class="row"><span class="dot" style="background: var(--b-g)"></span>탐욕<span class="range">56–75</span></div>
+        <div class="row"><span class="dot" style="background: var(--b-eg)"></span>극단적 탐욕<span class="range">76–100</span></div>
+      </div>
+    </div>
+    <script>
+      // 반원 게이지: 0(왼쪽) ~ 100(오른쪽). 구간 경계는 constants.ts DISPLAY_BANDS 와 같고, 구간 사이는 2px 띄운다.
+      const svg = document.getElementById('gauge');
+      const cx = 178, cy = 172, r = 146, w = 40;
+      const bands = [[0, 24.5, '--b-ef'], [24.5, 44.5, '--b-f'], [44.5, 55.5, '--b-n'], [55.5, 75.5, '--b-g'], [75.5, 100, '--b-eg']];
+      const pt = (s) => {
+        const t = Math.PI * (1 - s / 100);
+        return [cx + r * Math.cos(t), cy - r * Math.sin(t)];
+      };
+      const gap = (2 / (Math.PI * r)) * 100 / 2;
+      for (const [a, b, c] of bands) {
+        const [x1, y1] = pt(a === 0 ? 0 : a + gap);
+        const [x2, y2] = pt(b === 100 ? 100 : b - gap);
+        const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        p.setAttribute('d', `M ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2}`);
+        p.setAttribute('fill', 'none');
+        p.setAttribute('stroke', `var(${c})`);
+        p.setAttribute('stroke-width', w);
+        svg.appendChild(p);
+      }
+      const label = (x, text, anchor) => {
+        const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        t.setAttribute('x', x);
+        t.setAttribute('y', cy + 22);
+        t.setAttribute('text-anchor', anchor);
+        t.setAttribute('font-size', '18');
+        t.setAttribute('fill', '#6f6e69');
+        t.textContent = text;
+        svg.appendChild(t);
+      };
+      label(cx - r, '공포', 'middle');
+      label(cx + r, '탐욕', 'middle');
+    </script>
+  </body>
+</html>
