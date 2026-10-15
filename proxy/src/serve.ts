@@ -1,5 +1,5 @@
 /**
- * 로컬 개발용 정적 서버. 배포에는 쓰지 않는다(배포는 Cloudflare Pages).
+ * 로컬 개발용 정적 서버. 배포에는 쓰지 않는다(배포는 Cloudflare Workers 정적 자산).
  * 샌드박스 폰에서 보려면 `cloudflared tunnel --url http://localhost:8787` 로 HTTPS URL 을 만든다(DESIGN §3.7).
  */
 import { createServer, type Server } from 'node:http';

@@ -1,6 +1,6 @@
 /**
  * 게시. snapshot.json 은 parseSnapshot 자기검증을 통과한 경우에만 교체한다. status.json 은 항상 쓴다.
- * Cloudflare Pages 캐시 헤더는 public/_headers 로 함께 게시한다(DESIGN §7.1).
+ * Cloudflare 캐시 헤더는 public/_headers 로 함께 게시한다(DESIGN §7.1). Workers 정적 자산도 같은 형식을 읽는다.
  */
 import { join } from 'node:path';
 import { parseSnapshot } from '../../src/core/snapshot';
@@ -12,7 +12,7 @@ export const SNAPSHOT_PATH = join('v1', 'snapshot.json');
 export const STATUS_PATH = join('v1', 'status.json');
 export const HEADERS_PATH = '_headers';
 
-/** Cloudflare Pages `_headers` 형식. 로컬 serve.ts 의 cacheControlFor 와 같은 값. */
+/** Cloudflare `_headers` 형식(Pages·Workers 정적 자산 공통). 로컬 serve.ts 의 cacheControlFor 와 같은 값. */
 export const HEADERS_FILE = `/v1/snapshot.json
   Cache-Control: public, max-age=600, stale-while-revalidate=86400
   Access-Control-Allow-Origin: *

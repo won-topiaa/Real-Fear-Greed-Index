@@ -1,7 +1,7 @@
 # proxy/ — RFG 수집·검증·계산·게시 잡
 
 이름은 교훈 문서·`.gitignore`·`check-config` 와 맞추기 위해 `proxy/` 를 유지한다. 실체는 **하루 한 번 도는 잡**이며,
-결과는 정적 JSON(`public/v1/snapshot.json`, `public/v1/status.json`)으로 Cloudflare Pages 에 게시한다. 항상 켜진 서버는 없다.
+결과는 정적 JSON(`public/v1/snapshot.json`, `public/v1/status.json`)으로 Cloudflare Workers 정적 자산(`wrangler.jsonc`)에 게시한다. 항상 켜진 서버는 없다.
 
 ## 실행
 

@@ -55,9 +55,11 @@ jobs:
           path: proxy/.cache
           key: rfg-cache-${{ github.run_id }}
       # 실패한 실행도 status.json 은 게시한다(snapshot.json 은 검증 통과 시에만 바뀌므로 안전).
-      - name: Deploy to Cloudflare Pages
+      # Cloudflare Workers 정적 자산으로 게시한다(proxy/wrangler.jsonc, 코드 없이 public/ 만 서빙).
+      # Cloudflare Pages 는 Workers 로 통합되는 중이라(2026) 새로 만들지 않았다. 변수 이름 PAGES_* 는 그대로 쓴다.
+      - name: Deploy to Cloudflare (Workers static assets)
         if: ${{ always() && vars.PAGES_PROJECT != '' }}
-        run: npx wrangler pages deploy ./public --project-name "${PAGES_PROJECT}" --commit-dirty=true
+        run: npx wrangler deploy --name "${PAGES_PROJECT}"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

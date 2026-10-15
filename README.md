@@ -15,7 +15,7 @@ src/core     순수 TS 수식·분류·달력·스냅샷 계약·백테스트  (
 src/text     포맷·문구·홈 뷰모델 (순수 TS)               — 스토어 그림 스크립트가 그대로 import
 src/data     스냅샷 클라이언트(HTTP/목)·캐시·상태 훅·프레임워크 접근(platform.ts)
 src/ui       View 기반 컴포넌트, src/screens 화면, src/pages 라우트(createRoute)
-proxy/       수집·검증·계산·게시 잡(Node 22). GitHub Actions cron → 정적 JSON → Cloudflare Pages
+proxy/       수집·검증·계산·게시 잡(Node 22). GitHub Actions cron → 정적 JSON → Cloudflare Workers 정적 자산
 scripts/     doctor · check-config · check-routes · check-pure-modules · predeploy · ensure-local-config
 research/    엔진 v2 백테스트(Python). 데이터는 받아서 쓰고 커밋하지 않는다
 ```

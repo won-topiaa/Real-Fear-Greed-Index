@@ -166,10 +166,14 @@ cloudflared tunnel --url http://localhost:8787
 
 ---
 
-## 5. Cloudflare Pages + GitHub Actions 셋업 (한 번)
+## 5. Cloudflare(Workers 정적 자산) + GitHub Actions 셋업 (한 번)
 
-1. Cloudflare Pages 프로젝트 생성(직접 업로드형). 프로젝트 이름을 GitHub **Variables** `PAGES_PROJECT` 에, 호스트명(`xxx.pages.dev` 또는 커스텀 도메인)을 `PAGES_HOST` 에 넣는다.
-2. GitHub **Secrets**: `FRED_API_KEY`, `CLOUDFLARE_API_TOKEN`(Pages 편집 권한만), `CLOUDFLARE_ACCOUNT_ID`, `HEALTHCHECKS_PING_URL`.
+게시는 **Cloudflare Workers 정적 자산**이다(`proxy/wrangler.jsonc`, 코드 없이 `public/` 만 서빙, `_headers` 그대로 적용).
+Cloudflare Pages 는 Workers 로 통합되는 중이라 wrangler 4.13x 의 `pages project create` 가 Workers 로 넘겨져 실패한다(2026-10-15 실측). 변수 이름 `PAGES_*` 는 그대로 쓴다.
+
+1. 첫 게시(이 맥, `wrangler login` 상태): `cd proxy && npm run collect && npx wrangler deploy`. 출력의 `https://rfg-data.<계정>.workers.dev` 가 호스트다.
+   GitHub **Variables** `PAGES_PROJECT=rfg-data`, `PAGES_HOST=rfg-data.<계정>.workers.dev`.
+2. GitHub **Secrets**: `FRED_API_KEY`, `CLOUDFLARE_API_TOKEN`(대시보드 → My Profile → API Tokens → "Edit Cloudflare Workers" 템플릿, Account Resources 는 이 계정만), `CLOUDFLARE_ACCOUNT_ID`, `HEALTHCHECKS_PING_URL`.
 3. GitHub **Variables**(선택): `CNN_USER_AGENT`.
 4. `.github/workflows/collect.yml` 을 **수동 실행(workflow_dispatch)** 해 `status-<run>` 아티팩트의 `status.json` 이 `ok` 인지 본다.
 5. healthchecks.io 체크를 만들고(주기 1일, 유예 12시간) 핑 URL 을 Secrets 에 넣는다. GitHub 는 **공개 레포가 60일간 비활성이면 스케줄 워크플로를 끈다** — 이 데드맨 핑이 "잡이 아예 안 돈" 경우를 잡는 유일한 수단이다.
@@ -178,7 +182,7 @@ cloudflared tunnel --url http://localhost:8787
 Actions 러너 IP 가 CNN 봇 방어에 걸리면(`status.sources[cnn].error = http_403`), 수집기를 집 맥의 launchd 로 옮긴다:
 
 ```
-cd proxy && npm run collect && npx wrangler pages deploy ./public --project-name rfg-data
+cd proxy && npm run collect && npx wrangler deploy
 ```
 
 코드는 같고 실행 위치만 다르다.
