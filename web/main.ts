@@ -24,6 +24,9 @@ const BAND_COLOR: Record<Band, string> = {
 const BAND_EDGES: number[] = [0, ...DISPLAY_BANDS.map((b) => Math.min(100, b.max + 0.5))];
 const STORAGE_KEY = 'rfg.index';
 const RANGE_KEY = 'rfg.range';
+const COMPARE_KEY = 'rfg.compare';
+/** 비교 모드의 선 색(배경 띠의 빨강·파랑과 겹치지 않게 잉크·보라). dataviz 검증: 정상·CVD ΔE ≥ 30, 대비 ≥ 3:1 */
+const SERIES_COLOR: Record<IndexSymbol, string> = { SPX: 'var(--s-spx)', NDX: 'var(--s-ndx)' };
 type RangeKey = keyof typeof CHART_RANGES | 'max';
 const RANGE_KEYS: readonly RangeKey[] = ['y1', 'y3', 'y5', 'max'];
 /** 이보다 많은 거래일을 그리면 눈금을 월 대신 연 단위로 */
@@ -35,6 +38,15 @@ interface State {
   history: RfgHistory | null;
   index: IndexSymbol;
   range: RangeKey;
+  compare: boolean;
+}
+
+/** 차트에 그릴 한 선: 공통 날짜 축에 맞춘 값 */
+interface ChartSeries {
+  key: IndexSymbol;
+  label: string;
+  color: string;
+  values: (number | null)[];
 }
 
 const app = document.getElementById('app') as HTMLElement;
@@ -74,6 +86,22 @@ function readRange(): RangeKey {
   return 'y1';
 }
 
+function readCompare(): boolean {
+  try {
+    return localStorage.getItem(COMPARE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function saveCompare(on: boolean): void {
+  try {
+    localStorage.setItem(COMPARE_KEY, on ? '1' : '0');
+  } catch {
+    /* 무시 */
+  }
+}
+
 function saveRange(r: RangeKey): void {
   try {
     localStorage.setItem(RANGE_KEY, r);
@@ -82,11 +110,24 @@ function saveRange(r: RangeKey): void {
   }
 }
 
-/** 선택한 기간의 행. 요청한 기간보다 이력이 짧으면 있는 만큼 그리고, 시작일 안내를 붙인다. */
-function rangeRows(rows: HistoryRow[], range: RangeKey): { rows: HistoryRow[]; short: boolean } {
-  if (range === 'max') return { rows, short: false };
+/** 기간에 맞춘 공통 날짜 축. 요청한 기간보다 이력이 짧으면 있는 만큼(short). */
+function rangeAxis(dates: string[], range: RangeKey): { dates: string[]; short: boolean } {
+  if (range === 'max') return { dates, short: false };
   const days = CHART_RANGES[range] + 1;
-  return { rows: rows.slice(-days), short: rows.length < days };
+  return { dates: dates.slice(-days), short: dates.length < days };
+}
+
+/** 여러 지수의 이력을 날짜 합집합 축에 맞춘다. 그 지수의 이력이 없는 날은 null. */
+function alignSeries(list: { key: IndexSymbol; rows: HistoryRow[] }[], range: RangeKey): { dates: string[]; short: boolean; series: ChartSeries[]; starts: Record<string, string> } {
+  const all = Array.from(new Set(list.flatMap((l) => l.rows.map((r) => r.date)))).sort();
+  const axis = rangeAxis(all, range);
+  const series = list.map((l) => {
+    const byDate = new Map(l.rows.map((r) => [r.date, r.rfg] as const));
+    return { key: l.key, label: LABELS.index[l.key], color: SERIES_COLOR[l.key], values: axis.dates.map((d) => byDate.get(d) ?? null) };
+  });
+  const starts: Record<string, string> = {};
+  for (const l of list) starts[l.key] = l.rows[0]?.date ?? '';
+  return { ...axis, series, starts };
 }
 
 async function fetchJson(path: string): Promise<unknown> {
@@ -102,7 +143,7 @@ async function load(): Promise<void> {
     const snap = parseSnapshot(snapRaw);
     if (!snap.ok) throw new Error(`snapshot ${snap.error.path}`);
     const hist = histRaw == null ? null : parseHistory(histRaw);
-    state = { snapshot: snap.value, history: hist && hist.ok ? hist.value : null, index: readIndex(), range: readRange() };
+    state = { snapshot: snap.value, history: hist && hist.ok ? hist.value : null, index: readIndex(), range: readRange(), compare: readCompare() };
     render();
   } catch {
     app.innerHTML = `<p class="state">${esc(WEB_COPY.error)}</p><button class="retry" type="button">${esc(WEB_COPY.retry)}</button>`;
@@ -110,11 +151,11 @@ async function load(): Promise<void> {
   }
 }
 
-/** 지수의 1년 이력. history.json 이 없으면 스냅샷의 60거래일 이력으로 대신한다. */
-function seriesFor(s: State): HistoryRow[] {
-  const h = s.history?.markets[s.index].rows;
+/** 지수의 이력. history.json 이 없으면 스냅샷의 60거래일 이력으로 대신한다. */
+function seriesFor(s: State, sym: IndexSymbol = s.index): HistoryRow[] {
+  const h = s.history?.markets[sym].rows;
   if (h && h.length > 0) return h;
-  return s.snapshot.markets[s.index].history.map((r) => ({ date: r.date, rfg: r.rfg, p: r.p }));
+  return s.snapshot.markets[sym].history.map((r) => ({ date: r.date, rfg: r.rfg, p: r.p }));
 }
 
 function render(): void {
@@ -125,8 +166,16 @@ function render(): void {
   const fresh = assessFreshness(s.snapshot, s.index, Date.now());
   const blocked = fresh.level === 'stale' || latest.rfg == null;
   const rows = seriesFor(s);
-  const ranged = rangeRows(rows, s.range);
-  const startNote = ranged.short || s.range === 'max' ? WEB_COPY.dataStart(formatYmd(rows[0]?.date ?? '')) : '';
+  const chartSyms: IndexSymbol[] = s.compare ? [...SYMBOLS] : [s.index];
+  const chart = alignSeries(chartSyms.map((k) => ({ key: k, rows: seriesFor(s, k) })), s.range);
+  const axisStart = chart.dates[0] ?? '';
+  // 시작일 안내: 한 지수면 기간이 이력보다 길 때, 비교면 기간 시작보다 늦게 시작하는 지수마다
+  const startNotes = s.compare
+    ? chartSyms.filter((k) => (chart.starts[k] ?? '') > axisStart).map((k) => WEB_COPY.seriesStart(LABELS.index[k], formatYmd(chart.starts[k] ?? '')))
+    : chart.short || s.range === 'max'
+      ? [WEB_COPY.dataStart(formatYmd(rows[0]?.date ?? ''))]
+      : [];
+  const chartTitle = s.compare ? `${LABELS.index.SPX} · ${LABELS.index.NDX}` : LABELS.index[s.index];
 
   let badge = '';
   if (fresh.level === 'delayed') badge = badgeHtml(COPY.freshness('delayed', fresh.tradingDaysBehind), '#fab219');
@@ -150,15 +199,19 @@ function render(): void {
     ${blocked ? '' : compareHtml(rows)}
     <section class="card">
       <div class="card-head">
-        <h2>${esc(WEB_COPY.chartTitle)} · ${esc(LABELS.index[s.index])}</h2>
-        <div class="switch small" role="group" aria-label="${esc(WEB_COPY.rangeLabel)}">
-          ${RANGE_KEYS.map((k) => `<button type="button" data-range="${k}" aria-pressed="${k === s.range}">${esc(WEB_COPY.ranges[k])}</button>`).join('')}
+        <h2>${esc(WEB_COPY.chartTitle)} · ${esc(chartTitle)}</h2>
+        <div class="controls">
+          <button type="button" class="toggle" data-compare aria-pressed="${s.compare}">${esc(WEB_COPY.compareToggle)}</button>
+          <div class="switch small" role="group" aria-label="${esc(WEB_COPY.rangeLabel)}">
+            ${RANGE_KEYS.map((k) => `<button type="button" data-range="${k}" aria-pressed="${k === s.range}">${esc(WEB_COPY.ranges[k])}</button>`).join('')}
+          </div>
         </div>
       </div>
+      ${s.compare ? seriesLegendHtml(chart.series) : ''}
       ${legendHtml('chart-legend')}
-      ${startNote ? `<p class="note">${esc(startNote)}</p>` : ''}
+      ${startNotes.map((t) => `<p class="note">${esc(t)}</p>`).join('')}
       <div class="chart" id="chart"></div>
-      ${tableHtml(rows)}
+      ${tableHtml(chart.dates, chart.series)}
     </section>
     ${componentsHtml(s)}
     <footer class="footer">
@@ -168,7 +221,7 @@ function render(): void {
       <p>${esc(WEB_COPY.updated(kstText(s.snapshot.generatedAtUtc)))}</p>
     </footer>`;
 
-  app.querySelectorAll<HTMLButtonElement>('.switch button').forEach((b) =>
+  app.querySelectorAll<HTMLButtonElement>('[data-index]').forEach((b) =>
     b.addEventListener('click', () => {
       const i = b.dataset.index;
       if ((i === 'SPX' || i === 'NDX') && state) {
@@ -190,15 +243,21 @@ function render(): void {
     }),
   );
 
+  app.querySelector<HTMLButtonElement>('[data-compare]')?.addEventListener('click', () => {
+    if (!state) return;
+    state.compare = !state.compare;
+    saveCompare(state.compare);
+    render();
+  });
+
   const chartEl = document.getElementById('chart') as HTMLElement;
-  const chartRows = ranged.rows;
   chartObserver?.disconnect();
   let lastWidth = 0;
   chartObserver = new ResizeObserver(() => {
     const w = Math.round(chartEl.clientWidth);
     if (w !== lastWidth) {
       lastWidth = w;
-      drawChart(chartEl, chartRows);
+      drawChart(chartEl, chart.dates, chart.series, s.compare);
     }
   });
   chartObserver.observe(chartEl);
@@ -300,17 +359,18 @@ function compareHtml(rows: HistoryRow[]): string {
 
 // ── 1년 추이 차트 ─────────────────────────────────────────────────────────
 
-function drawChart(el: HTMLElement, rows: HistoryRow[]): void {
-  if (rows.length < 2) {
+function drawChart(el: HTMLElement, dates: string[], series: ChartSeries[], compare: boolean): void {
+  const n = dates.length;
+  if (n < 2 || series.every((sr) => sr.values.every((v) => v == null))) {
     el.innerHTML = `<p class="note">${esc(WEB_COPY.chartEmpty)}</p>`;
     return;
   }
   const width = Math.max(280, Math.round(el.clientWidth));
   const height = 220;
-  const m = { l: 30, r: 34, t: 10, b: 26 };
+  // 비교 모드는 선 끝에 '지수 이름 값' 라벨이 붙어 오른쪽 여백이 더 필요하다
+  const m = { l: 30, r: compare ? 92 : 34, t: 10, b: 26 };
   const iw = width - m.l - m.r;
   const ih = height - m.t - m.b;
-  const n = rows.length;
   const x = (i: number): number => m.l + (i / (n - 1)) * iw;
   const y = (v: number): number => m.t + (1 - v / 100) * ih;
   const f = (v: number): string => v.toFixed(1);
@@ -328,12 +388,12 @@ function drawChart(el: HTMLElement, rows: HistoryRow[]): void {
   const yearly = n > YEARLY_TICKS_AFTER;
   const key = (d: string): string => (yearly ? d.slice(0, 4) : d.slice(0, 7));
   const starts: number[] = [];
-  for (let i = 1; i < n; i++) if (key(rows[i]?.date ?? '') !== key(rows[i - 1]?.date ?? '')) starts.push(i);
+  for (let i = 1; i < n; i++) if (key(dates[i] ?? '') !== key(dates[i - 1] ?? '')) starts.push(i);
   const step = !yearly && width < 520 ? 2 : 1;
   const xTicks = starts
     .filter((_, k) => k % step === 0)
     .map((i) => {
-      const d = rows[i]?.date ?? '';
+      const d = dates[i] ?? '';
       const mo = Number(d.slice(5, 7));
       const text = yearly || mo === 1 ? `${d.slice(0, 4)}년` : `${mo}월`;
       return `<line x1="${f(x(i))}" x2="${f(x(i))}" y1="${f(y(0))}" y2="${f(y(0) + 4)}" stroke="var(--axis)"/>
@@ -341,68 +401,114 @@ function drawChart(el: HTMLElement, rows: HistoryRow[]): void {
     })
     .join('');
 
-  // 결측에서 끊기는 선
-  let d = '';
-  let pen = false;
-  rows.forEach((r, i) => {
-    if (r.rfg == null) {
-      pen = false;
-      return;
+  // 결측에서 끊기는 선. 한 지수면 잉크, 비교면 지수 색
+  const lineColor = (sr: ChartSeries): string => (compare ? sr.color : 'var(--ink)');
+  const paths = series
+    .map((sr) => {
+      let d = '';
+      let pen = false;
+      sr.values.forEach((v, i) => {
+        if (v == null) {
+          pen = false;
+          return;
+        }
+        d += `${pen ? 'L' : 'M'}${f(x(i))} ${f(y(v))}`;
+        pen = true;
+      });
+      return `<path d="${d}" fill="none" stroke="${lineColor(sr)}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    })
+    .join('');
+
+  // 끝점과 라벨. 비교 모드에서 라벨이 13px 안으로 붙으면 벌리고 짧은 연결선으로 잇는다(라벨을 겹쳐 쌓지 않는다).
+  const ends = series
+    .map((sr) => {
+      let i = n - 1;
+      while (i >= 0 && sr.values[i] == null) i--;
+      const v = i >= 0 ? sr.values[i] : null;
+      return v == null ? null : { sr, i, v, yv: y(v), yl: y(v) };
+    })
+    .filter((e): e is { sr: ChartSeries; i: number; v: number; yv: number; yl: number } => e != null)
+    .sort((a, b) => a.yv - b.yv);
+  for (let k = 1; k < ends.length; k++) {
+    const prev = ends[k - 1];
+    const cur = ends[k];
+    if (prev && cur && cur.yl - prev.yl < 13) {
+      const mid = (prev.yl + cur.yl) / 2;
+      prev.yl = mid - 6.5;
+      cur.yl = mid + 6.5;
     }
-    d += `${pen ? 'L' : 'M'}${f(x(i))} ${f(y(r.rfg))}`;
-    pen = true;
-  });
+  }
+  const endMarks = ends
+    .map((e) => {
+      const cx = x(e.i);
+      const dotFill = compare ? e.sr.color : BAND_COLOR[bandOf(e.v)];
+      const text = compare ? `${e.sr.label} ${formatScore(e.v)}` : formatScore(e.v);
+      const leader = Math.abs(e.yl - e.yv) > 0.5 ? `<line x1="${f(cx + 4)}" y1="${f(e.yv)}" x2="${f(cx + 10)}" y2="${f(e.yl)}" stroke="var(--muted)" stroke-width="1"/>` : '';
+      return `<circle cx="${f(cx)}" cy="${f(e.yv)}" r="4.5" fill="${dotFill}" stroke="var(--surface)" stroke-width="2"/>${leader}
+        <text class="end-label" x="${f(cx + 12)}" y="${f(e.yl + 4)}">${esc(text)}</text>`;
+    })
+    .join('');
 
-  let lastIdx = n - 1;
-  while (lastIdx >= 0 && rows[lastIdx]?.rfg == null) lastIdx--;
-  const lastRow = rows[lastIdx];
-  const end =
-    lastRow && lastRow.rfg != null
-      ? `<circle cx="${f(x(lastIdx))}" cy="${f(y(lastRow.rfg))}" r="4.5" fill="${BAND_COLOR[bandOf(lastRow.rfg)]}" stroke="var(--surface)" stroke-width="2"/>
-         <text class="end-label" x="${f(x(lastIdx) + 8)}" y="${f(y(lastRow.rfg) + 4)}">${esc(formatScore(lastRow.rfg))}</text>`
-      : '';
-
-  const summary = lastRow ? `${WEB_COPY.chartTitle}: ${formatTradingDate(rows[0]?.date ?? '', 'short')}부터 ${formatTradingDate(lastRow.date, 'short')}까지, 최근 ${formatScore(lastRow.rfg)}` : WEB_COPY.chartTitle;
+  const summary = `${WEB_COPY.chartTitle}: ${formatTradingDate(dates[0] ?? '', 'short')}부터 ${formatTradingDate(dates[n - 1] ?? '', 'short')}까지, ${ends
+    .map((e) => `${e.sr.label} ${formatScore(e.v)}`)
+    .join(', ')}`;
   el.innerHTML = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(summary)}">
       ${washes}${grid}${base}${yTicks}${xTicks}
-      <path d="${d}" fill="none" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-      ${end}
+      ${paths}
+      ${endMarks}
       <line class="xhair" x1="0" x2="0" y1="${m.t}" y2="${f(y(0))}" stroke="var(--ink-2)" stroke-width="1" visibility="hidden"/>
-      <circle class="hdot" r="5" stroke="var(--surface)" stroke-width="2" visibility="hidden"/>
+      ${series.map((_, k) => `<circle class="hdot" data-k="${k}" r="5" stroke="var(--surface)" stroke-width="2" visibility="hidden"/>`).join('')}
       <rect class="hit" x="${m.l}" y="0" width="${f(iw)}" height="${height}" fill="transparent"/>
     </svg>
     <div class="tooltip" role="status"></div>`;
 
   const svg = el.querySelector('svg') as SVGSVGElement;
   const xhair = el.querySelector('.xhair') as SVGLineElement;
-  const hdot = el.querySelector('.hdot') as SVGCircleElement;
+  const hdots = Array.from(el.querySelectorAll<SVGCircleElement>('.hdot'));
   const tip = el.querySelector('.tooltip') as HTMLDivElement;
   const hide = (): void => {
     xhair.setAttribute('visibility', 'hidden');
-    hdot.setAttribute('visibility', 'hidden');
+    hdots.forEach((d) => d.setAttribute('visibility', 'hidden'));
     tip.dataset.show = 'false';
   };
   const show = (clientX: number): void => {
     const rect = svg.getBoundingClientRect();
     const px = ((clientX - rect.left) / rect.width) * width;
     const i = Math.max(0, Math.min(n - 1, Math.round(((px - m.l) / iw) * (n - 1))));
-    const row = rows[i];
-    if (!row || row.rfg == null) return hide();
+    const vals = series.map((sr) => sr.values[i] ?? null);
+    if (vals.every((v) => v == null)) return hide();
     const cx = x(i);
-    const cy = y(row.rfg);
-    const b = bandOf(row.rfg);
     xhair.setAttribute('x1', f(cx));
     xhair.setAttribute('x2', f(cx));
     xhair.setAttribute('visibility', 'visible');
-    hdot.setAttribute('cx', f(cx));
-    hdot.setAttribute('cy', f(cy));
-    hdot.setAttribute('fill', BAND_COLOR[b]);
-    hdot.setAttribute('visibility', 'visible');
-    tip.innerHTML = `${esc(formatTradingDate(row.date))}<br><strong>${esc(formatScore(row.rfg))}</strong> · ${bandLabelHtml(b)}`;
+    let top = Infinity;
+    series.forEach((sr, k) => {
+      const dot = hdots[k];
+      const v = vals[k];
+      if (!dot) return;
+      if (v == null) {
+        dot.setAttribute('visibility', 'hidden');
+        return;
+      }
+      dot.setAttribute('cx', f(cx));
+      dot.setAttribute('cy', f(y(v)));
+      dot.setAttribute('fill', compare ? sr.color : BAND_COLOR[bandOf(v)]);
+      dot.setAttribute('visibility', 'visible');
+      top = Math.min(top, y(v));
+    });
+    const lines = series.map((sr, k) => {
+      const v = vals[k] ?? null;
+      const key = compare ? `<span class="series-key" style="--c:${sr.color}"></span>${esc(sr.label)} ` : '';
+      return `${key}<strong>${esc(formatScore(v))}</strong>${v == null ? '' : ` · ${bandLabelHtml(bandOf(v))}`}`;
+    });
+    const [a, b] = vals;
+    if (compare && a != null && b != null) lines.push(`<span class="muted">${esc(WEB_COPY.diff(signedScore(a, b)))}</span>`);
+    const d = dates[i] ?? '';
+    tip.innerHTML = `${esc(`${d.slice(0, 4)}년 ${formatTradingDate(d)}`)}<br>${lines.join('<br>')}`;
     const scale = rect.width / width;
-    const left = Math.max(70, Math.min(rect.width - 70, cx * scale));
+    const left = Math.max(80, Math.min(rect.width - 80, cx * scale));
     tip.style.left = `${left}px`;
-    tip.style.top = `${Math.max(0, cy * scale - 64)}px`;
+    tip.style.top = `${Math.max(0, top * scale - (compare ? 96 : 64))}px`;
     tip.dataset.show = 'true';
   };
   const hit = el.querySelector('.hit') as SVGRectElement;
@@ -411,15 +517,41 @@ function drawChart(el: HTMLElement, rows: HistoryRow[]): void {
   hit.addEventListener('pointerleave', hide);
 }
 
-function tableHtml(rows: HistoryRow[]): string {
-  const recent = rows.slice(-TABLE_ROWS).reverse();
-  if (recent.length === 0) return '';
-  const body = recent
-    .map((r) => `<tr><td>${esc(formatTradingDate(r.date))}</td><td>${esc(formatScore(r.rfg))}</td><td>${r.rfg == null ? EMPTY : esc(bandText(bandOf(r.rfg)))}</td></tr>`)
-    .join('');
+/** 반올림한 두 점수의 차이를 부호와 함께: +3, −2, 0 */
+function signedScore(a: number, b: number): string {
+  const d = Number(formatScore(a)) - Number(formatScore(b));
+  return d > 0 ? `+${d}` : d < 0 ? `−${Math.abs(d)}` : '0';
+}
+
+function seriesLegendHtml(series: ChartSeries[]): string {
+  return `<div class="legend chart-legend series-legend" role="list" aria-label="${esc(WEB_COPY.seriesLegend)}">${series
+    .map((sr) => `<span class="item" role="listitem"><span class="series-key" style="--c:${sr.color}"></span>${esc(sr.label)}</span>`)
+    .join('')}</div>`;
+}
+
+function tableHtml(dates: string[], series: ChartSeries[]): string {
+  const idx = dates.map((_, i) => i).slice(-TABLE_ROWS).reverse();
+  if (idx.length === 0) return '';
   const h = WEB_COPY.tableHead;
+  const one = series.length === 1;
+  const head = one
+    ? `<th>${esc(h.date)}</th><th>${esc(h.rfg)}</th><th>${esc(h.band)}</th>`
+    : `<th>${esc(h.date)}</th>${series.map((sr) => `<th>${esc(sr.label)}</th>`).join('')}<th>${esc(WEB_COPY.diffHead)}</th>`;
+  const body = idx
+    .map((i) => {
+      const vals = series.map((sr) => sr.values[i] ?? null);
+      const date = `<td>${esc(formatTradingDate(dates[i] ?? ''))}</td>`;
+      if (one) {
+        const v = vals[0] ?? null;
+        return `<tr>${date}<td>${esc(formatScore(v))}</td><td>${v == null ? EMPTY : esc(bandText(bandOf(v)))}</td></tr>`;
+      }
+      const [a, b] = vals;
+      const diff = a != null && b != null ? signedScore(a, b) : EMPTY;
+      return `<tr>${date}${vals.map((v) => `<td>${esc(formatScore(v))}</td>`).join('')}<td>${esc(diff)}</td></tr>`;
+    })
+    .join('');
   return `<details><summary>${esc(WEB_COPY.tableTitle)}</summary>
-      <table><thead><tr><th>${esc(h.date)}</th><th>${esc(h.rfg)}</th><th>${esc(h.band)}</th></tr></thead><tbody>${body}</tbody></table>
+      <table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
     </details>`;
 }
 

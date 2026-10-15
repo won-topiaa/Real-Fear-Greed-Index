@@ -18,6 +18,9 @@
   --b-g: #5b9af2;
   --b-eg: #1d50b8;
   --wash: 0.16;
+  /* 비교 모드 선 색: S&P 500 잉크, 나스닥 100 보라 */
+  --s-spx: #0b0b0b;
+  --s-ndx: #6250d6;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
@@ -38,6 +41,8 @@
     --b-g: #2253a8;
     --b-eg: #4f93f7;
     --wash: 0.22;
+    --s-spx: #f0efec;
+    --s-ndx: #9085e9;
   }
 }
 :root[data-theme='dark'] {
@@ -58,6 +63,8 @@
   --b-g: #2253a8;
   --b-eg: #4f93f7;
   --wash: 0.22;
+  --s-spx: #f0efec;
+  --s-ndx: #9085e9;
 }
 
 * {
@@ -440,4 +447,51 @@ th {
   font-size: 13px;
   padding: 4px 12px;
   min-height: 32px;
+}
+
+/* 비교 모드 */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.toggle {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 12px;
+  min-height: 32px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.toggle[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--surface);
+  border-color: var(--ink);
+}
+.toggle:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.series-key {
+  display: inline-block;
+  width: 16px;
+  height: 0;
+  border-top: 2px solid var(--c, var(--ink));
+  border-radius: 2px;
+  vertical-align: middle;
+  margin-right: 2px;
+}
+.series-legend {
+  margin-bottom: 0;
+  color: var(--ink);
+  font-weight: 600;
+}
+.tooltip .muted {
+  color: var(--muted);
 }
