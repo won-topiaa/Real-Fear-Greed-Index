@@ -77,6 +77,29 @@ test('기대 거래일 뒤의 봉(야후 장중 현재가)은 버리고 기대 �
   assert.equal(sel.chosen?.series.length, COUNT);
 });
 
+test('야후 프록시가 여러 개면 앞에서부터 시도한다: 첫 프록시 실패 → 둘째로 채택', async () => {
+  const calls: string[] = [];
+  const f = fakeFetch(
+    [
+      { match: (u) => u.includes('stlouisfed'), body: fredJson(lagging) },
+      { match: (u) => u.includes('stooq'), status: 403, body: 'denied' },
+      { match: (u) => u.startsWith('https://one.example.workers.dev/'), status: 403, body: 'forbidden' },
+      { match: (u) => u.startsWith('https://two.example.workers.dev/'), body: yahooJson(full) },
+    ],
+    calls,
+  );
+  const env = { ...DEFAULT_ENV, FRED_API_KEY: 'k', YAHOO_PROXY_URL: 'https://one.example.workers.dev/, https://two.example.workers.dev/' };
+  const log = collectingLogger();
+  const sel = await selectPriceSeries({ ...ctx(f, env), log }, 'NDX', EXPECTED);
+  assert.equal(sel.chosen?.source, 'yahoo');
+  assert.equal(sel.reports.find((r) => r.id === 'yahoo')?.status, 'ok');
+  assert.deepEqual(sel.reports.find((r) => r.id === 'yahoo')?.fallbacks, ['#1 http_403']);
+  assert.equal(sel.reports.find((r) => r.id === 'fred')?.fallbacks, undefined);
+  assert.deepEqual(calls.filter((u) => u.includes('workers.dev')).map((u) => new URL(u).host), ['one.example.workers.dev', 'two.example.workers.dev']);
+  assert.ok(log.lines.some((l) => l.includes('yahoo/NDX: http_403 via #1')));
+  assert.ok(log.lines.every((l) => !l.includes('one.example')));
+});
+
 test('26% 점프가 있는 소스는 invalid 로 거부한다', async () => {
   const jump = full.map((p, i) => (i === full.length - 1 ? { ...p, close: p.close * 1.3 } : p));
   const f = fakeFetch([

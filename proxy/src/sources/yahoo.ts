@@ -72,19 +72,33 @@ export function yahooStartDate(symbol: IndexSymbol, nowUtcMs: number): string {
   return `${Number(today.slice(0, 4)) - 10}${today.slice(4)}`;
 }
 
-export function yahooUrl(symbol: IndexSymbol, env: Env, nowUtcMs: number): string {
+export function yahooDirectUrl(symbol: IndexSymbol, nowUtcMs: number): string {
   const period1 = Math.floor(Date.parse(`${yahooStartDate(symbol, nowUtcMs)}T00:00:00Z`) / 1000);
   const period2 = Math.floor(nowUtcMs / 1000);
-  const direct = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(YAHOO_SYMBOL[symbol])}?period1=${period1}&period2=${period2}&interval=1d`;
-  const proxy = env.YAHOO_PROXY_URL.trim();
-  if (!proxy) return direct;
-  return `${proxy}${proxy.includes('?') ? '&' : '?'}url=${encodeURIComponent(direct)}`;
+  return `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(YAHOO_SYMBOL[symbol])}?period1=${period1}&period2=${period2}&interval=1d`;
+}
+
+export function yahooProxies(env: Env): string[] {
+  return env.YAHOO_PROXY_URL.split(',').map((s) => s.trim()).filter(Boolean);
+}
+
+/** 프록시가 있으면 프록시마다 ?url= 로 감싼 주소(앞에서부터 시도), 없으면 직접 주소 하나 */
+export function yahooUrls(symbol: IndexSymbol, env: Env, nowUtcMs: number): string[] {
+  const direct = yahooDirectUrl(symbol, nowUtcMs);
+  const proxies = yahooProxies(env);
+  if (proxies.length === 0) return [direct];
+  return proxies.map((p) => `${p}${p.includes('?') ? '&' : '?'}url=${encodeURIComponent(direct)}`);
+}
+
+export function yahooUrl(symbol: IndexSymbol, env: Env, nowUtcMs: number): string {
+  return yahooUrls(symbol, env, nowUtcMs)[0] as string;
 }
 
 export const yahooAdapter: PriceAdapter = {
   id: 'yahoo',
   isEnabled: () => true,
   url: yahooUrl,
+  urls: yahooUrls,
   headers: (env: Env) => ({ 'User-Agent': env.CNN_USER_AGENT, Accept: 'application/json' }),
   parse: parseYahoo,
   normalize: normalizeYahoo,

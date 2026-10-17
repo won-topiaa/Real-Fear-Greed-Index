@@ -1,0 +1,5 @@
+# RFG 전용 야후 프록시. 계정 ID 는 넣지 않는다(proxy/.env 의 CLOUDFLARE_ACCOUNT_ID·CLOUDFLARE_API_TOKEN 을 쓴다).
+name = "rfg-yahoo-proxy"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+workers_dev = true

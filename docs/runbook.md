@@ -233,7 +233,9 @@ npm run deploy
 
 | 증상 | 확인 | 조치 |
 |---|---|---|
-| 앱에 "N거래일 전 값이에요" 배지 | `status.json` 의 `sources[]` | `date_lag` 면 그 실행의 `wait-for-fred` 잡이 FRED 를 기다리는 중이다(올라오면 collect 가 다시 돈다, 시한 종가 16시간 뒤). 시한을 넘겼으면 01:00 UTC 예비 재시도·`gh workflow run collect` |
+| GitHub 실패 메일 "collect" (Freshness check) | 실패한 실행의 요약(게시 점검 표·⚠️·❌) | `NDX 가 N거래일 늦다` 면 아래 줄. `수집 실패`면 Collect 로그. `NYSE_HOLIDAYS` 면 `src/core/calendar.ts` 에 다음 해 휴장일 추가 |
+| 앱에 "N거래일 전 값이에요" 배지 | `status.json` 의 `sources[]` | FRED `date_lag` + yahoo `failed` 면 야후 프록시가 둘 다 막힌 것: `curl "$YAHOO_PROXY_URL?url=…"` 로 확인, 전용 프록시는 `cd proxy && npm run deploy-yahoo-proxy` 로 다시 배포. 그동안 `wait-for-fred` 잡이 FRED 를 기다리고(시한 종가 16시간 뒤) 다음 예약 실행이 다시 시도한다. 급하면 `gh workflow run collect` |
+| 실행 요약에 `앞선 프록시 실패 — 예비 프록시로 받았다` | `status.json` 의 `sources[yahoo].fallbacks` | 전용 프록시(`rfg-yahoo-proxy`)가 실패 중. 위와 같이 확인·재배포 |
 | 앱이 지수를 `—` 로 막음(stale) | 잡이 3거래일 넘게 실패 | Actions 로그·healthchecks 확인. 러너 차단이면 §5 의 실행 위치 이동 |
 | "심리 데이터를 아직 못 받았어요" | `sources[cnn].error` | `http_403`/`schema` 면 inspect 로 형태 재확인. 히스토리 마지막 값이 5달력일 안이면 자동 폴백 중 |
 | 앱 "업데이트가 필요해요" | 스냅샷 `schemaVersion` 변경 | 의도한 변경이면 앱 재배포. 아니면 파이프라인 롤백 |

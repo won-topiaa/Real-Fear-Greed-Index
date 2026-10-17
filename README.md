@@ -52,7 +52,7 @@ RFG_t = EMA3[ 0.6·FG_t + 0.4·(100 − P_t) ]                             FG = 
 - 지수 계산 시작: **나스닥 100 2020-07-15**, **S&P 500 2022-10-17** (FRED SP500 10년 + 5년 백분위 워밍업 한계)
 - CNN 은 그날 값을 다음 날까지 계속 고친다. 가장 최근 하루는 잠정치이고, 이후 수집에서 CNN 의 최신 값으로 바뀐다.
 - 게시 파일(GitHub Pages): `v1/snapshot.json`(오늘 값과 최근 60거래일) · `v1/status.json`(수집 상태) · `v1/history.json`(RFG · P 이력과 세부 지표). CNN 원값의 장기 이력은 공개하지 않는다.
-- 자동화: GitHub Actions `collect` 가 매일 22:30 UTC(07:30 KST), 01:00 UTC(재시도)에 수집 → 웹 빌드 → Pages 게시. GitHub 가 예약 실행을 2~6시간 늦게 돌리고 FRED 는 나스닥 100 을 ≈ 03:37Z(12:37 KST)에 올린다. 그래서 FRED 가 하루 늦은 지수는 Yahoo 로 채우고, 그것도 안 되면 `wait-for-fred` 잡이 FRED 를 10분마다 확인하다 올라오면 수집을 다시 돌린다. 공개 레포 60일 비활성으로 예약 실행이 꺼지지 않게 마지막 커밋이 50일을 넘으면 빈 커밋을 남긴다.
+- 자동화: GitHub Actions `collect` 가 하루 5번(22:23·23:53·01:23·03:53·07:23 UTC — GitHub 가 예약 실행을 2~6시간 늦게 돌리고 가끔 건너뛰어서 여러 개에 건다) 수집 → 웹 빌드 → Pages 게시. FRED 는 나스닥 100 을 ≈ 03:37Z(12:37 KST)에 올려서, FRED 가 하루 늦은 지수는 Yahoo(전용 프록시 `proxy/yahoo-proxy/` → 예비 프록시)로 채우고, 그것도 안 되면 `wait-for-fred` 잡이 FRED 를 10분마다 확인하다 올라오면 수집을 다시 돌린다. 매 실행 끝의 게시 점검이 종가 12시간 뒤(17:00 KST)에도 늦은 지수가 있으면 실패해 GitHub 실패 메일로 알린다. 공개 레포 60일 비활성으로 예약 실행이 꺼지지 않게 마지막 커밋이 50일을 넘으면 빈 커밋을 남긴다.
 - 설정: Secrets `FRED_API_KEY`, `YAHOO_PROXY_URL`(실명이 든 workers.dev 주소라 Secret 으로만), Variables `PAGES_HOST`. 수동 게시는 `gh workflow run collect`.
 
 ## 구조

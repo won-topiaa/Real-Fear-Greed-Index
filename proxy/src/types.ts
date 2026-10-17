@@ -13,13 +13,18 @@ export interface SourceReport {
   /** 값이 아닌 분류 문자열. 비밀값·URL 쿼리는 넣지 않는다. */
   error: string | null;
   issues?: ValidationIssue[];
+  /** 앞선 주소(야후 프록시 #1 등)가 실패해 다음 주소로 받은 경우 그 실패들 — 예: ['#1 http_403'] */
+  fallbacks?: string[];
 }
 
 export interface Env {
   FRED_API_KEY: string;
   CNN_USER_AGENT: string;
   HEALTHCHECKS_PING_URL: string;
-  /** 야후 직접 접속은 429 로 막혀 있어 Cloudflare Worker 프록시(`?url=<인코딩된 주소>`)를 거친다. 주소에 계정 하위 도메인(실명)이 있어 Secret 으로만 둔다. */
+  /**
+   * 야후 직접 접속은 429 로 막혀 있어 Cloudflare Worker 프록시(`?url=<인코딩된 주소>`)를 거친다. 쉼표로 여러 개 — 앞에서부터 시도.
+   * 주소에 계정 하위 도메인(실명)이 있어 Secret 으로만 둔다.
+   */
   YAHOO_PROXY_URL: string;
   PORT: number;
 }
@@ -45,6 +50,8 @@ export interface PriceAdapter {
   id: PriceSource;
   isEnabled(env: Env): boolean;
   url(symbol: IndexSymbol, env: Env, nowUtcMs: number): string;
+  /** 있으면 url 대신 이 주소들을 앞에서부터 시도한다(첫 성공 응답을 쓴다) — 야후 프록시 여러 개 */
+  urls?(symbol: IndexSymbol, env: Env, nowUtcMs: number): string[];
   headers(env: Env): Record<string, string>;
   parse(text: string): unknown;
   normalize(parsed: unknown): PricePoint[];
