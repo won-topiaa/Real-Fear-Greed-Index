@@ -1,6 +1,8 @@
 name: collect
 
-# 22:30 UTC = 07:30 KST (미국 마감 20:00/21:00 UTC 이후, 서머타임 무관). 01:00 UTC 는 FRED 반영 지연 대비 재시도.
+# 22:30 UTC = 07:30 KST (미국 마감 20:00/21:00 UTC 이후, 서머타임 무관). 01:00 UTC 는 예비 재시도.
+# 실제로는 GitHub 가 예약 실행을 매일 2~6시간 늦게 돌린다(2026-09~10 측정: 22:30 → 00:13~03:06Z, 01:00 → 05:13~07:10Z).
+# FRED 반영은 SP500 ≈ 00:00Z, NASDAQ100 ≈ 03:37Z 라 본실행에서 NASDAQ100 이 자주 하루 늦다 → wait-for-fred 잡이 기다렸다가 다시 돌린다.
 # 주말·휴장일에도 돌며 unchanged 로 정상 종료한다.
 # 주의: GitHub 는 공개 레포가 60일간 저장소 활동(커밋 등)이 없으면 스케줄 워크플로를 끈다. 워크플로 실행 자체는 활동으로 치지 않는다
 #       → 마지막 단계(keepalive)가 마지막 커밋이 50일을 넘으면 빈 커밋을 push 한다. 그래도 멈추면 healthchecks 데드맨 핑으로 감지.
@@ -22,6 +24,10 @@ concurrency:
 jobs:
   collect:
     runs-on: ubuntu-latest
+    # FRED 가 아직 하루 전 값까지만 준 지수(예: NDX) — 있으면 wait-for-fred 잡이 돈다
+    outputs:
+      lagging: ${{ steps.collect.outputs.lagging }}
+      expected: ${{ steps.collect.outputs.expected }}
     # contents: keepalive 빈 커밋 push. pages·id-token: GitHub Pages 게시. 캐시·아티팩트는 GITHUB_TOKEN 권한이 필요 없다.
     permissions:
       contents: write
@@ -110,3 +116,40 @@ jobs:
             git commit --allow-empty -m "chore: keepalive (예약 실행 유지, 마지막 커밋 ${age_days}일 전)"
             git push || echo "::warning::keepalive push failed"
           fi
+
+  # 본실행에서 FRED 가 하루 전 값까지만 준 지수가 있으면 FRED 최신 관측일만 10분마다 확인하고, 올라오면 수집 워크플로를
+  # 새로 한 번 돌린다(workflow_dispatch 는 GITHUB_TOKEN 으로도 새 실행이 생긴다). 새 실행은 같은 concurrency 그룹이라
+  # 이 실행이 끝나자마자 시작한다. 두 지수가 다 늦었으면 먼저 올라온 쪽으로 다시 돌고, 나머지는 그 실행의 이 잡이 다시 기다린다.
+  # 기다림은 기대 거래일 종가 16시간 뒤(EDT 12:00Z)·최대 5시간까지 — 그때까지 안 오면 01:00 UTC 예비 재시도·다음 날에 맡긴다.
+  wait-for-fred:
+    needs: collect
+    if: ${{ !cancelled() && needs.collect.outputs.lagging != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 320
+    permissions:
+      contents: read
+      actions: write
+    defaults:
+      run:
+        working-directory: proxy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: proxy/package-lock.json
+      - run: npm ci
+      - name: Wait for FRED
+        id: wait
+        run: npx tsx src/cli.ts wait --symbols "$LAGGING" --expected "$EXPECTED"
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          LAGGING: ${{ needs.collect.outputs.lagging }}
+          EXPECTED: ${{ needs.collect.outputs.expected }}
+      - name: Re-run collect
+        if: steps.wait.outputs.ready != ''
+        run: gh workflow run collect.yml --ref "$GITHUB_REF_NAME"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}

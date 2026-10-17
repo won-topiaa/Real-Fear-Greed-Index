@@ -68,7 +68,7 @@ observations: 2400+, first: 2015-01-02, last: 2026-10-10, dots: 몇 개
 
 | # | 확인 | 맞으면 | 다르면 |
 |---|---|---|---|
-| 1 | `last` 날짜가 전일 거래일 (22:30 UTC 이전이면 이틀 전일 수 있음) | 그대로 | 자주 하루 늦으면 `src/sources/price.ts` 의 `PRICE_ADAPTERS` 순서를 `[stooq, fred, yahoo]` 로 |
+| 1 | `last` 날짜가 전일 거래일 (SP500 은 ≈ 00:00Z, NASDAQ100 은 ≈ 03:37Z 전이면 하루 더 전) | 그대로 | 그 시각이 지나도 하루 늦으면 FRED 쪽 지연 — collect 의 `wait-for-fred` 잡 로그 확인 |
 | 2 | `dots` 가 0 이상 | 그대로(`.` 제거 로직 존재) | — |
 
 #### Stooq
@@ -233,7 +233,7 @@ npm run deploy
 
 | 증상 | 확인 | 조치 |
 |---|---|---|
-| 앱에 "N거래일 전 값이에요" 배지 | `status.json` 의 `sources[]` | `date_lag` 면 다음 01:00 UTC 재시도를 기다린다. 이틀 넘으면 소스 우선순위 조정 |
+| 앱에 "N거래일 전 값이에요" 배지 | `status.json` 의 `sources[]` | `date_lag` 면 그 실행의 `wait-for-fred` 잡이 FRED 를 기다리는 중이다(올라오면 collect 가 다시 돈다, 시한 종가 16시간 뒤). 시한을 넘겼으면 01:00 UTC 예비 재시도·`gh workflow run collect` |
 | 앱이 지수를 `—` 로 막음(stale) | 잡이 3거래일 넘게 실패 | Actions 로그·healthchecks 확인. 러너 차단이면 §5 의 실행 위치 이동 |
 | "심리 데이터를 아직 못 받았어요" | `sources[cnn].error` | `http_403`/`schema` 면 inspect 로 형태 재확인. 히스토리 마지막 값이 5달력일 안이면 자동 폴백 중 |
 | 앱 "업데이트가 필요해요" | 스냅샷 `schemaVersion` 변경 | 의도한 변경이면 앱 재배포. 아니면 파이프라인 롤백 |

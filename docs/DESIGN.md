@@ -59,7 +59,7 @@
 ## 2. 시스템 아키텍처
 
 ```
-┌─ 스케줄 잡: GitHub Actions cron  22:30 UTC(07:30 KST) 본실행, 01:00 UTC 재시도 ──────────────┐
+┌─ 스케줄 잡: GitHub Actions cron  22:30 UTC(07:30 KST) 본실행, 01:00 UTC 재시도 + FRED 대기 ─┐
 │  proxy/src/collect.ts                                                                      │
 │   sources/cnn.ts    ─ FG 현재값(+historical 백필)  ─┐  각 어댑터: fetch → parse → validate   │
 │   sources/fred.ts   ─ SP500, NASDAQ100 (키)        ├─ → normalize → DailySeries              │
@@ -119,7 +119,7 @@
 |---|---|---|---|---|---|
 | FG 현재값·약 1년 히스토리 | CNN `https://production.dataviz.cnn.io/index/fearandgreed/graphdata` | **비공식** | 없음. 브라우저 User-Agent 필요 **[검증 필요]** | `fear_and_greed: {score, rating, timestamp?, previous_close?...}`, `fear_and_greed_historical.data: [{x: epoch ms, y, rating}]` **[검증 필요]** | 1 |
 | FG | 자기 저장소 `fg/history.json` | — | — | CNN 실패 시 마지막 관측값(신선도 게이트 안에서만) | 폴백 |
-| SPX/NDX 종가 | FRED `series/observations?series_id=SP500`(`NASDAQ100`), `file_type=json` | 공식 | `FRED_API_KEY` | `observations: [{date, value}]`, 휴장일 `value: "."`, 최근 10년 **[검증 필요: 전일 종가 반영 시각]** | 1 |
+| SPX/NDX 종가 | FRED `series/observations?series_id=SP500`(`NASDAQ100`), `file_type=json` | 공식 | `FRED_API_KEY` | `observations: [{date, value}]`, 휴장일 `value: "."`, 최근 10년. 반영 시각(2026-10-16·17 확인): SP500 19:02 CT ≈ 00:00Z, NASDAQ100 22:37 CT ≈ 03:37Z — 둘 다 22:30Z 본실행보다 늦다(§7.2 FRED 대기) | 1 |
 | 〃 | Stooq `https://stooq.com/q/d/l/?s=^spx&i=d`(`^ndx`) | 비공식 | 없음 | CSV `Date,Open,High,Low,Close,Volume`; 데이터 없으면 200 + `No data` **[검증 필요]** | 2 |
 | 〃 | Yahoo `v8/finance/chart/^GSPC?range=10y&interval=1d`(`^NDX`) | 비공식 | 없음 | `chart.result[0].timestamp[]`, `indicators.quote[0].close[]`(null 포함) **[검증 필요]** | 3 |
 
@@ -135,7 +135,7 @@ for source of [fred, stooq, yahoo]:
   if issues.some(fatal) → 기록, 다음
   chosen = series                                    // 이 소스의 시계열을 통째로 사용
   break
-if chosen 없음 → 새 스냅샷을 만들지 않는다(이전 유지). status.result = 'partial'. 01:00 UTC 재시도.
+if chosen 없음 → 새 스냅샷을 만들지 않는다(이전 유지). status.result = 'partial'. FRED 가 date_lag 였으면 wait 잡이 기다렸다 다시 돈다(§7.2).
 교차검증: 성공한 소스가 2개 이상이면 겹치는 최근 20거래일 종가 상대오차 > 0.1% 시 'source-mismatch' 경고(게시는 함, about에 표시 안 함, status에만).
 ```
 
@@ -709,7 +709,8 @@ collect:
 ```
 
 - 주말·휴장일: `expected`가 이전과 같으면 `unchanged: true`로 정상 종료.
-- 재시도: 01:00 UTC 두 번째 실행이 같은 로직을 돈다(FRED 반영 지연 대비).
+- FRED 대기(2026-10-17): FRED 는 NASDAQ100 을 22:37 CT(≈ 03:37Z)에야 올려 22:30Z·01:00Z 실행보다 늦고, GitHub 예약 실행은 매일 2~6시간 늦게 돈다(측정: 22:30 → 00:13~03:06Z, 01:00 → 05:13~07:10Z). 그래서 본실행에서 FRED 가 `date_lag` 인 지수가 있으면 `wait-for-fred` 잡이 FRED 최신 관측일만 10분마다 확인하고(`cli.ts wait`, `src/wait.ts`), 올라오면 collect 워크플로를 `workflow_dispatch` 로 다시 돌린다. 시한은 기대 거래일 종가 16시간 뒤(EDT 12:00Z)·최대 5시간. 두 지수가 다 늦으면 먼저 올라온 쪽으로 다시 돌고, 다시 돈 실행의 wait 잡이 나머지를 기다린다.
+- 재시도: 01:00 UTC 두 번째 실행은 예비로 남긴다(FRED 대기가 시한을 넘긴 날).
 - Actions 러너 IP가 CNN 봇 방어에 걸리면 **[검증 필요]** 수집기는 `node proxy/dist/collect.js --out ./public` 한 줄이라 집 맥의 launchd에서 같은 명령을 돌리고 결과를 Pages 아티팩트로 올린다(워크플로 수동 실행이 가장 간단). 실행 위치만 바뀌고 코드는 같다.
 - GitHub는 공개 레포가 60일간 저장소 활동(커밋 등)이 없으면 스케줄 워크플로를 끈다. 워크플로 실행은 활동으로 치지 않으므로 collect.yml 마지막 단계(keepalive)가 마지막 커밋이 50일을 넘으면 빈 커밋을 push 한다(2026-10-15). 그래도 멈추는 경우는 healthchecks 데드맨 핑으로 잡는다.
 - 로그에 헤더·쿼리스트링을 찍지 않는다. `log.ts`가 `api_key=` 뒤를 마스킹한다(테스트).
@@ -831,7 +832,7 @@ collect:
 | CNN 비공식 엔드포인트 차단·형태 변경 | 높음 | 심리축 정지 | 스키마·범위·날짜 검증 → 마지막 관측값(게이트 안) → fg-missing 상태. 자기 관측 누적으로 히스토리 의존 제거. 장기 중단 시 대안 심리축은 별도 지수로 v2 검토 |
 | CNN historical `x` 타임존 오해석 | 중 | FG 하루 밀림 | inspect 스크립트로 M2 0번에 확정, CNN 이력 우선(§3.3) |
 | Actions 러너 IP가 봇 방어에 걸림 | 중 | 수집 실패 | 수집기 실행 위치 이동성(집 맥 launchd) |
-| FRED 전일 종가 반영 지연 | 중 | 스냅샷 하루 지연 | Stooq/Yahoo 폴백(한 창 한 소스), 01:00 UTC 재시도 |
+| FRED 전일 종가 반영 지연 | 높음(NDX 매일) | 스냅샷 하루 지연 | wait-for-fred 잡이 FRED 를 10분마다 확인 후 다시 수집(§7.2), 01:00 UTC 예비 재시도. Stooq/Yahoo 폴백은 막혀 있다 |
 | 소스 간 종가 차이 | 낮음 | 백분위 순위 흔들림 | 한 창 한 소스, 교차검증 0.1% 경고 |
 | 미니앱 외부 도메인 fetch 불가 | 중 | 실데이터 화면 불가 | §3.7 실험을 M4 첫 항목으로; HTTPS만 사용 |
 | react-native-svg 호스트 렌더 실패 | 중 | 게이지 안 보임 | M3 첫 샌드박스에서 확인, View 폴백 |
@@ -845,7 +846,7 @@ collect:
 ### 10.2 미해결 질문(결정권자: 저장소 소유자)
 
 1. CNN graphdata 실응답: 필드명(`score`/`timestamp`), historical `x` 단위·기준, 휴장일에도 값이 있는지, 필요한 User-Agent — **M2 0번 inspect 실행으로 확정**.
-2. FRED SP500/NASDAQ100이 전일 종가를 몇 시(ET)에 반영하는지 — 22:30 UTC 실행에서 FRED가 자주 `date_lag`면 우선순위를 Stooq → FRED로 바꿀지.
+2. ~~FRED SP500/NASDAQ100이 전일 종가를 몇 시(ET)에 반영하는지~~ — 확인(2026-10-17): SP500 ≈ 19:00 CT, NASDAQ100 ≈ 22:37 CT. Stooq 는 막혀 있어 우선순위 대신 FRED 대기로 해결(§7.2).
 3. 레포 공개 여부 — 공개면 GitHub Pages 가능(데이터 히스토리 노출), 비공개면 Cloudflare 계정 필요. 1순위는 Cloudflare Pages.
 4. 미니앱의 외부 도메인 fetch·평문 HTTP 허용 여부(§3.7).
 5. 백테스트로 W(252 vs 756)·N/M/K·α/β/γ 기본값을 바꿀지 — **v2 에서 결정(§4.6)**. 다시 바꾸면 `constants.ts` 한 곳 + `research/` 재실행.

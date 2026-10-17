@@ -1,7 +1,7 @@
 /**
  * FRED (공식, API 키). SP500 / NASDAQ100 일별 종가, 최근 10년.
  * 알려진 형태 [검증 필요]: { observations: [{ date: 'YYYY-MM-DD', value: '6543.21' | '.' }] } — '.' 은 휴장일/결측.
- * 전일 종가 반영 시각 [검증 필요] — 22:30 UTC 잡에서 자주 date_lag 면 우선순위를 Stooq 로 바꾼다.
+ * 반영 시각(2026-10-16·17 확인): SP500 19:02 CT ≈ 00:00Z, NASDAQ100 22:37 CT ≈ 03:37Z — 본실행보다 늦어 ../wait.ts 가 기다린다.
  */
 import { addCalendarDays, isIsoDate, nyDateOf } from '../../../src/core/calendar';
 import type { IndexSymbol, PricePoint } from '../../../src/core/types';
