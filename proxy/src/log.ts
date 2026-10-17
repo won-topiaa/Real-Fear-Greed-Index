@@ -5,6 +5,8 @@ const PATTERNS: Array<[RegExp, string]> = [
   [/(token=)[^&\s"']+/gi, '$1***'],
   [/(Bearer\s+)[^\s"']+/g, '$1***'],
   [/(hc-ping\.com\/)[^\s"'/]+/g, '$1***'],
+  // Cloudflare workers.dev 계정 하위 도메인에 실명이 있다(야후 프록시)
+  [/[a-z0-9-]+(\.[a-z0-9-]+)?\.workers\.dev/gi, '***.workers.dev'],
 ];
 
 /** 로그에 비밀값이 새지 않도록 URL 쿼리·헤더 값을 가린다. 테스트로 고정. */

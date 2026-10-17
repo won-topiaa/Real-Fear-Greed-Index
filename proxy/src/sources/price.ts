@@ -51,7 +51,8 @@ export async function selectPriceSeries(ctx: Ctx, symbol: IndexSymbol, expected:
     try {
       const res = await fetchText(ctx, adapter.url(symbol, ctx.env, ctx.nowUtcMs), adapter.headers(ctx.env));
       raw[adapter.id] = res.text;
-      series = sortByDate(adapter.normalize(adapter.parse(res.text)));
+      // 기대 거래일 뒤의 봉(야후 장중 현재가 등)은 아직 확정 종가가 아니다
+      series = sortByDate(adapter.normalize(adapter.parse(res.text))).filter((p) => p.date <= expected);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'unknown';
       reports.push({ ...base, fetchedAtUtc: new Date(ctx.nowUtcMs).toISOString(), error: msg.slice(0, 80) });

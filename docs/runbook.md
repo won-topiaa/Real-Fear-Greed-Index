@@ -13,7 +13,7 @@ npm run doctor
 cd proxy && npm ci && cp .env.example .env && cd ..
 ```
 
-`proxy/.env` 에 `FRED_API_KEY` 를 채운다(없어도 Stooq/Yahoo 로 동작). 키는 채팅·스크린샷에 붙이지 않는다. 확인은 `npm run check-config`.
+`proxy/.env` 에 `FRED_API_KEY`·`YAHOO_PROXY_URL` 을 채운다(야후는 직접 접속이 429 라 프록시가 있어야 동작). 키는 채팅·스크린샷에 붙이지 않는다. 확인은 `npm run check-config`.
 
 ---
 
@@ -172,7 +172,7 @@ cloudflared tunnel --url http://localhost:8787
 `actions/upload-pages-artifact` → `actions/deploy-pages` 로 올린다. (2026-10-15 하루 동안 쓴 Cloudflare Workers 는 계정 하위 도메인에 실명이 들어가 내렸다.)
 
 1. 저장소 Pages 를 Actions 빌드로 켠다: `gh api -X POST repos/<owner>/<repo>/pages -f build_type=workflow`. GitHub **Variables** `PAGES_HOST=<owner>.github.io/<repo>`(이전 게시본을 내려받는 데 쓴다).
-2. GitHub **Secrets**: `FRED_API_KEY`, `HEALTHCHECKS_PING_URL`(선택).
+2. GitHub **Secrets**: `FRED_API_KEY`, `YAHOO_PROXY_URL`(야후 프록시 — Cloudflare Worker `https://<이름>.<계정>.workers.dev/`, `?url=<인코딩된 주소>` 를 받는다. 계정 하위 도메인에 실명이 있어 레포·로그에 남기지 않는다), `HEALTHCHECKS_PING_URL`(선택).
 3. GitHub **Variables**(선택): `CNN_USER_AGENT`.
 4. `.github/workflows/collect.yml` 을 **수동 실행(workflow_dispatch)** 해 `status-<run>` 아티팩트의 `status.json` 이 `ok` 인지 본다.
 5. GitHub 는 **공개 레포가 60일간 저장소 활동(커밋 등)이 없으면 스케줄 워크플로를 끈다**(워크플로 실행은 활동이 아니다). collect.yml 의 마지막 단계(keepalive)가 마지막 커밋이 50일을 넘으면 빈 커밋을 push 한다 — 수동 실행에서 `keepalive_days=0` 으로 시험할 수 있다. 추가로 healthchecks.io 체크(주기 1일, 유예 12시간)의 핑 URL 을 Secrets 에 넣으면 "잡이 아예 안 돈" 경우도 알림을 받는다(선택).

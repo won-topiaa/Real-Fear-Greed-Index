@@ -41,7 +41,7 @@ node scripts/inspect.mjs --source yahoo --symbol SPX --save
 ## 비밀값
 
 `.env` 만(gitignore). 키 값은 채팅·스크린샷·로그에 넣지 않는다. 로그는 `api_key=` 뒤를 자동으로 가린다(`src/log.ts`, 테스트로 고정).
-GitHub Actions 에서는 `FRED_API_KEY`, `HEALTHCHECKS_PING_URL`(선택)을 Secrets 에 둔다. 게시는 GitHub Pages 라 Cloudflare 키는 필요 없다.
+GitHub Actions 에서는 `FRED_API_KEY`, `YAHOO_PROXY_URL`(야후는 직접 접속이 429 — Cloudflare Worker 프록시), `HEALTHCHECKS_PING_URL`(선택)을 Secrets 에 둔다. 게시는 GitHub Pages 라 Cloudflare 키는 필요 없다.
 
 ## 실패 모드
 

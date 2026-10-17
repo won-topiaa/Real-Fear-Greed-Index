@@ -64,6 +64,19 @@ test('모든 소스가 지연/실패면 chosen 은 null', async () => {
   assert.equal(sel.reports[2]?.error, 'http_500');
 });
 
+test('기대 거래일 뒤의 봉(야후 장중 현재가)은 버리고 기대 거래일까지로 고른다', async () => {
+  const intraday = [...full, { date: '2026-09-14', close: full[full.length - 1]!.close * 1.01 }];
+  const f = fakeFetch([
+    { match: (u) => u.includes('stlouisfed'), body: fredJson(lagging) },
+    { match: (u) => u.includes('stooq'), status: 403, body: 'denied' },
+    { match: (u) => u.includes('yahoo'), body: yahooJson(intraday) },
+  ]);
+  const sel = await selectPriceSeries(ctx(f), 'NDX', EXPECTED);
+  assert.equal(sel.chosen?.source, 'yahoo');
+  assert.equal(sel.chosen?.series.at(-1)?.date, EXPECTED);
+  assert.equal(sel.chosen?.series.length, COUNT);
+});
+
 test('26% 점프가 있는 소스는 invalid 로 거부한다', async () => {
   const jump = full.map((p, i) => (i === full.length - 1 ? { ...p, close: p.close * 1.3 } : p));
   const f = fakeFetch([

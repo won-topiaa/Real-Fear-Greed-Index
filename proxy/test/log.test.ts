@@ -7,6 +7,8 @@ test('maskSecrets: api_key·token·Bearer·hc-ping 을 가린다', () => {
   assert.equal(maskSecrets('Authorization: Bearer sk-live-123'), 'Authorization: Bearer ***');
   assert.equal(maskSecrets('https://hc-ping.com/0000-1111/fail'), 'https://hc-ping.com/***/fail');
   assert.equal(maskSecrets('token=zzz&x=1'), 'token=***&x=1');
+  // workers.dev 계정 하위 도메인(실명)
+  assert.equal(maskSecrets('GET https://yfinance-proxy.someone123.workers.dev/?url=https%3A%2F%2Fquery1'), 'GET https://***.workers.dev/?url=https%3A%2F%2Fquery1');
 });
 
 test('collectingLogger 도 마스킹한다', () => {

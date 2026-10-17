@@ -121,7 +121,7 @@
 | FG | 자기 저장소 `fg/history.json` | — | — | CNN 실패 시 마지막 관측값(신선도 게이트 안에서만) | 폴백 |
 | SPX/NDX 종가 | FRED `series/observations?series_id=SP500`(`NASDAQ100`), `file_type=json` | 공식 | `FRED_API_KEY` | `observations: [{date, value}]`, 휴장일 `value: "."`, 최근 10년. 반영 시각(2026-10-16·17 확인): SP500 19:02 CT ≈ 00:00Z, NASDAQ100 22:37 CT ≈ 03:37Z — 둘 다 22:30Z 본실행보다 늦다(§7.2 FRED 대기) | 1 |
 | 〃 | Stooq `https://stooq.com/q/d/l/?s=^spx&i=d`(`^ndx`) | 비공식 | 없음 | CSV `Date,Open,High,Low,Close,Volume`; 데이터 없으면 200 + `No data` **[검증 필요]** | 2 |
-| 〃 | Yahoo `v8/finance/chart/^GSPC?range=10y&interval=1d`(`^NDX`) | 비공식 | 없음 | `chart.result[0].timestamp[]`, `indicators.quote[0].close[]`(null 포함) **[검증 필요]** | 3 |
+| 〃 | Yahoo `v8/finance/chart/^GSPC?period1=…&period2=…&interval=1d`(`^NDX`, 조회 창은 FRED 와 같게: SPX 10년·NDX 13년) | 비공식 | 직접은 429 → Secret `YAHOO_PROXY_URL`(Cloudflare Worker `?url=`) 경유 | `chart.result[0].timestamp[]`, `indicators.quote[0].close[]`(null 포함), 장중엔 오늘 봉이 붙음(기대 거래일 뒤는 버림). 미국 마감 직후 값이 있고 FRED 와 차이 NDX 최대 0.085%·SPX 0.12%(2026-10-17 확인) | 3 |
 
 모든 어댑터는 `fetch → parse → validate → normalize` 네 단계로 나누고 `fetchImpl`·`now`를 주입받는다. 결과는 공통 타입 `DailySeries`(ET 거래일 오름차순, 중복 없음, 휴장일 행 없음).
 
@@ -709,6 +709,7 @@ collect:
 ```
 
 - 주말·휴장일: `expected`가 이전과 같으면 `unchanged: true`로 정상 종료.
+- FRED 가 늦는 날은 먼저 Yahoo(프록시 경유)가 같은 실행에서 그 지수를 채운다(§3.2 우선순위 3). 아래 FRED 대기는 Yahoo 도 실패한 날의 예비다.
 - FRED 대기(2026-10-17): FRED 는 NASDAQ100 을 22:37 CT(≈ 03:37Z)에야 올려 22:30Z·01:00Z 실행보다 늦고, GitHub 예약 실행은 매일 2~6시간 늦게 돈다(측정: 22:30 → 00:13~03:06Z, 01:00 → 05:13~07:10Z). 그래서 본실행에서 FRED 가 `date_lag` 인 지수가 있으면 `wait-for-fred` 잡이 FRED 최신 관측일만 10분마다 확인하고(`cli.ts wait`, `src/wait.ts`), 올라오면 collect 워크플로를 `workflow_dispatch` 로 다시 돌린다. 시한은 기대 거래일 종가 16시간 뒤(EDT 12:00Z)·최대 5시간. 두 지수가 다 늦으면 먼저 올라온 쪽으로 다시 돌고, 다시 돈 실행의 wait 잡이 나머지를 기다린다.
 - 재시도: 01:00 UTC 두 번째 실행은 예비로 남긴다(FRED 대기가 시한을 넘긴 날).
 - Actions 러너 IP가 CNN 봇 방어에 걸리면 **[검증 필요]** 수집기는 `node proxy/dist/collect.js --out ./public` 한 줄이라 집 맥의 launchd에서 같은 명령을 돌리고 결과를 Pages 아티팩트로 올린다(워크플로 수동 실행이 가장 간단). 실행 위치만 바뀌고 코드는 같다.
@@ -832,7 +833,7 @@ collect:
 | CNN 비공식 엔드포인트 차단·형태 변경 | 높음 | 심리축 정지 | 스키마·범위·날짜 검증 → 마지막 관측값(게이트 안) → fg-missing 상태. 자기 관측 누적으로 히스토리 의존 제거. 장기 중단 시 대안 심리축은 별도 지수로 v2 검토 |
 | CNN historical `x` 타임존 오해석 | 중 | FG 하루 밀림 | inspect 스크립트로 M2 0번에 확정, CNN 이력 우선(§3.3) |
 | Actions 러너 IP가 봇 방어에 걸림 | 중 | 수집 실패 | 수집기 실행 위치 이동성(집 맥 launchd) |
-| FRED 전일 종가 반영 지연 | 높음(NDX 매일) | 스냅샷 하루 지연 | wait-for-fred 잡이 FRED 를 10분마다 확인 후 다시 수집(§7.2), 01:00 UTC 예비 재시도. Stooq/Yahoo 폴백은 막혀 있다 |
+| FRED 전일 종가 반영 지연 | 높음(NDX 매일) | 스냅샷 하루 지연 | wait-for-fred 잡이 FRED 를 10분마다 확인 후 다시 수집(§7.2), Yahoo(프록시 경유) 폴백, 01:00 UTC 예비 재시도. Stooq 는 막혀 있다 |
 | 소스 간 종가 차이 | 낮음 | 백분위 순위 흔들림 | 한 창 한 소스, 교차검증 0.1% 경고 |
 | 미니앱 외부 도메인 fetch 불가 | 중 | 실데이터 화면 불가 | §3.7 실험을 M4 첫 항목으로; HTTPS만 사용 |
 | react-native-svg 호스트 렌더 실패 | 중 | 게이지 안 보임 | M3 첫 샌드박스에서 확인, View 폴백 |

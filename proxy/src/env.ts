@@ -5,6 +5,7 @@ export const DEFAULT_ENV: Env = {
   FRED_API_KEY: '',
   CNN_USER_AGENT: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
   HEALTHCHECKS_PING_URL: '',
+  YAHOO_PROXY_URL: '',
   PORT: 8787,
 };
 
@@ -42,6 +43,7 @@ export function loadEnv(opts: { envFilePath?: string; processEnv?: NodeJS.Proces
     FRED_API_KEY: pick('FRED_API_KEY') ?? DEFAULT_ENV.FRED_API_KEY,
     CNN_USER_AGENT: pick('CNN_USER_AGENT') || DEFAULT_ENV.CNN_USER_AGENT,
     HEALTHCHECKS_PING_URL: pick('HEALTHCHECKS_PING_URL') ?? DEFAULT_ENV.HEALTHCHECKS_PING_URL,
+    YAHOO_PROXY_URL: pick('YAHOO_PROXY_URL') ?? DEFAULT_ENV.YAHOO_PROXY_URL,
     PORT: Number(pick('PORT') ?? DEFAULT_ENV.PORT) || DEFAULT_ENV.PORT,
   };
   return { ...env, ...opts.overrides };

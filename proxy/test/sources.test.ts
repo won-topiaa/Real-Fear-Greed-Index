@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import { cnnEpochToDate, normalizeCnnHistory, parseCnn, validateCnn } from '../src/sources/cnn';
 import { normalizeFred, parseFred } from '../src/sources/fred';
 import { normalizeStooq, parseStooq } from '../src/sources/stooq';
-import { normalizeYahoo, parseYahoo } from '../src/sources/yahoo';
+import { normalizeYahoo, parseYahoo, yahooStartDate, yahooUrl } from '../src/sources/yahoo';
+import { DEFAULT_ENV } from '../src/env';
 import { cnnJson, fredJson, stooqCsv, yahooJson } from '../src/synth';
 import type { FgPoint, PricePoint } from '../../src/core/types';
 
@@ -49,6 +50,17 @@ test('Yahoo: timestamp→뉴욕 날짜, null 종가 제거 [검증 필요]', () 
   assert.throws(() => parseYahoo('{"chart":{"result":null,"error":{"code":"Not Found"}}}'), /chart\.error/);
   assert.throws(() => parseYahoo('{"chart":{"result":[{"timestamp":[1],"indicators":{"quote":[{"close":[1,2]}]}}]}}'), /length/);
   assert.throws(() => parseYahoo('{"chart":{"result":[{"timestamp":["a"],"indicators":{"quote":[{"close":[1]}]}}]}}'), /timestamp\[0\]/);
+});
+
+test('Yahoo URL: FRED 와 같은 조회 창, 프록시가 있으면 ?url= 로 감싼다', () => {
+  const now = Date.parse('2026-10-17T03:00:00Z'); // 뉴욕 10-16
+  assert.equal(yahooStartDate('SPX', now), '2016-10-16');
+  assert.equal(yahooStartDate('NDX', now), '2013-10-19');
+  const direct = yahooUrl('NDX', DEFAULT_ENV, now);
+  assert.equal(direct, `https://query1.finance.yahoo.com/v8/finance/chart/%5ENDX?period1=${Date.parse('2013-10-19T00:00:00Z') / 1000}&period2=${now / 1000}&interval=1d`);
+  const proxied = yahooUrl('NDX', { ...DEFAULT_ENV, YAHOO_PROXY_URL: 'https://p.example.workers.dev/' }, now);
+  assert.equal(proxied, `https://p.example.workers.dev/?url=${encodeURIComponent(direct)}`);
+  assert.equal(new URL(proxied).searchParams.get('url'), direct);
 });
 
 test('CNN: 형태 가정 픽스처 파싱·검증·정규화 [검증 필요]', () => {

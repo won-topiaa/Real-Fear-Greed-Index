@@ -1,9 +1,11 @@
 /**
  * Yahoo Finance chart API (비공식). ^GSPC / ^NDX.
- * 알려진 형태 [검증 필요]: { chart: { result: [{ timestamp: number[], indicators: { quote: [{ close: (number|null)[] }] } }], error } }
- * timestamp 는 초 단위 epoch(장 시작 시각) → 뉴욕 날짜로 변환.
+ * 형태: { chart: { result: [{ timestamp: number[], indicators: { quote: [{ close: (number|null)[] }] } }], error } }
+ * timestamp 는 초 단위 epoch(장 시작 시각) → 뉴욕 날짜로 변환. 장중에는 오늘 봉(현재가)이 붙는다 — price.ts 가 기대 거래일 뒤를 버린다.
+ * 직접 접속은 429(집 IP 도 마찬가지)라 YAHOO_PROXY_URL(Cloudflare Worker)을 거친다. 2026-10-17 확인: 미국 마감 직후 값이 있고
+ * (FRED NASDAQ100 은 ≈ 03:37Z), FRED 와 겹치는 날 종가 차이는 NDX 13년 최대 0.085%, SPX 10년 최대 0.12%(하루).
  */
-import { nyDateOf } from '../../../src/core/calendar';
+import { addCalendarDays, nyDateOf } from '../../../src/core/calendar';
 import type { IndexSymbol, PricePoint } from '../../../src/core/types';
 import type { Env, PriceAdapter } from '../types';
 
@@ -60,10 +62,29 @@ export function normalizeYahoo(parsed: unknown): PricePoint[] {
   return out;
 }
 
+/**
+ * 조회 시작일 — FRED 와 같은 창으로 맞춰 어느 소스로 계산해도 이력 시작일이 같게 한다.
+ * NDX 는 fred.ts 와 같은 365×13일, SPX 는 FRED 가 주는 10년(같은 날짜 10년 전부터).
+ */
+export function yahooStartDate(symbol: IndexSymbol, nowUtcMs: number): string {
+  const today = nyDateOf(nowUtcMs);
+  if (symbol === 'NDX') return addCalendarDays(today, -365 * 13);
+  return `${Number(today.slice(0, 4)) - 10}${today.slice(4)}`;
+}
+
+export function yahooUrl(symbol: IndexSymbol, env: Env, nowUtcMs: number): string {
+  const period1 = Math.floor(Date.parse(`${yahooStartDate(symbol, nowUtcMs)}T00:00:00Z`) / 1000);
+  const period2 = Math.floor(nowUtcMs / 1000);
+  const direct = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(YAHOO_SYMBOL[symbol])}?period1=${period1}&period2=${period2}&interval=1d`;
+  const proxy = env.YAHOO_PROXY_URL.trim();
+  if (!proxy) return direct;
+  return `${proxy}${proxy.includes('?') ? '&' : '?'}url=${encodeURIComponent(direct)}`;
+}
+
 export const yahooAdapter: PriceAdapter = {
   id: 'yahoo',
   isEnabled: () => true,
-  url: (symbol) => `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(YAHOO_SYMBOL[symbol])}?range=10y&interval=1d`,
+  url: yahooUrl,
   headers: (env: Env) => ({ 'User-Agent': env.CNN_USER_AGENT, Accept: 'application/json' }),
   parse: parseYahoo,
   normalize: normalizeYahoo,

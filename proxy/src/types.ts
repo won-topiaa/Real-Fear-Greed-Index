@@ -19,6 +19,8 @@ export interface Env {
   FRED_API_KEY: string;
   CNN_USER_AGENT: string;
   HEALTHCHECKS_PING_URL: string;
+  /** 야후 직접 접속은 429 로 막혀 있어 Cloudflare Worker 프록시(`?url=<인코딩된 주소>`)를 거친다. 주소에 계정 하위 도메인(실명)이 있어 Secret 으로만 둔다. */
+  YAHOO_PROXY_URL: string;
   PORT: number;
 }
 
