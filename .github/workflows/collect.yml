@@ -18,13 +18,14 @@ on:
         required: false
         default: '50'
 
-concurrency:
-  group: collect
-  cancel-in-progress: false
-
 jobs:
   collect:
     runs-on: ubuntu-latest
+    # 수집·게시만 한 번에 하나씩. 실행 전체가 아니라 이 잡에만 건다 — wait-for-fred 가 몇 시간 기다리는 동안
+    # 다른 실행(01:00 재시도 등)의 수집까지 막지 않게(2026-10-17 시험에서 01:00 실행이 3시간 묶였다).
+    concurrency:
+      group: collect
+      cancel-in-progress: false
     # FRED 가 아직 하루 전 값까지만 준 지수(예: NDX) — 있으면 wait-for-fred 잡이 돈다
     outputs:
       lagging: ${{ steps.collect.outputs.lagging }}
@@ -121,8 +122,8 @@ jobs:
           fi
 
   # 본실행에서 FRED 가 하루 전 값까지만 준 지수가 있으면 FRED 최신 관측일만 10분마다 확인하고, 올라오면 수집 워크플로를
-  # 새로 한 번 돌린다(workflow_dispatch 는 GITHUB_TOKEN 으로도 새 실행이 생긴다). 새 실행은 같은 concurrency 그룹이라
-  # 이 실행이 끝나자마자 시작한다. 두 지수가 다 늦었으면 먼저 올라온 쪽으로 다시 돌고, 나머지는 그 실행의 이 잡이 다시 기다린다.
+  # 새로 한 번 돌린다(workflow_dispatch 는 GITHUB_TOKEN 으로도 새 실행이 생긴다). 야후(프록시)가 그 지수를 채운 날에는 돌지 않는다.
+  # 이 잡은 concurrency 밖이라 기다리는 동안 다른 실행의 수집을 막지 않는다. 두 지수가 다 늦었으면 먼저 올라온 쪽으로 다시 돌고, 나머지는 그 실행의 이 잡이 다시 기다린다.
   # 기다림은 기대 거래일 종가 16시간 뒤(EDT 12:00Z)·최대 5시간까지 — 그때까지 안 오면 01:00 UTC 예비 재시도·다음 날에 맡긴다.
   wait-for-fred:
     needs: collect
