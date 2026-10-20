@@ -241,7 +241,7 @@ npm run deploy
 | "심리 데이터를 아직 못 받았어요" | `sources[cnn].error` | `http_403`/`schema` 면 inspect 로 형태 재확인. 히스토리 마지막 값이 5달력일 안이면 자동 폴백 중 |
 | 앱 "업데이트가 필요해요" | 스냅샷 `schemaVersion` 변경 | 의도한 변경이면 앱 재배포. 아니면 파이프라인 롤백 |
 | 홈에 "샘플 데이터" 배지가 배포본에서 보임 | 목 모드로 배포됨 | 즉시 `apiBaseUrl` 채워 재배포. predeploy 를 우회했는지 확인 |
-| 사이트가 하루 넘게 안 바뀌는데 실패 메일도 없음 | Actions 탭에 예약 실행이 없음 | GitHub 예약 실행이 멈춘 것. 감시 워커가 돌렸어야 한다: `cd proxy && npx wrangler tail rfg-watchdog` 로 매시 17분 로그(`no: …`·`dispatched: …`·`error: …`) 확인. `skip: GH_DISPATCH_TOKEN 없음` 이면 토큰을 넣는다(`npx wrangler secret put GH_DISPATCH_TOKEN --config watchdog/wrangler.toml`), `error: 실행 목록 401` 이면 토큰 만료 → 새로 만들어 같은 명령. 급하면 `gh workflow run collect` |
+| 사이트가 하루 넘게 안 바뀌는데 실패 메일도 없음 | Actions 탭에 예약 실행이 없음 | GitHub 예약 실행이 멈춘 것. 감시 워커가 돌렸어야 한다: `cd proxy && npx wrangler tail rfg-watchdog` 로 매시 17분 로그(`no: …`·`dispatched: …`·`error: …`) 확인. `skip: GH_DISPATCH_TOKEN 없음` 이면 토큰을 넣는다(`cd proxy && npm run set-watchdog-token`), `error: 실행 목록 401` 이면 토큰 만료 → 새로 만들어 같은 명령. 토큰: GitHub Settings → Developer settings → Fine-grained tokens, 저장소 `Real-Fear-Greed-Index` 만, Repository permissions 의 Actions: Read and write. 급하면 `gh workflow run collect` |
 | healthchecks 알림 | 잡이 안 돌았음 | Actions 스케줄 비활성(60일 비활성) 여부 → 수동 실행 후 레포에 커밋 1건. keepalive 단계 로그(`last commit N days ago`)와 push 경고 확인 |
 
 ---

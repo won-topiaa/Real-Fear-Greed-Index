@@ -2,7 +2,7 @@
  * RFG 감시 워커(Cloudflare Worker, cron 매시 17분). 게시본이 늦으면 GitHub collect 워크플로를 workflow_dispatch 로 돌린다.
  * 판단은 decide.ts. 공개 주소가 없다(workers_dev = false) — cron 으로만 돈다.
  * 비밀값 GH_DISPATCH_TOKEN: 이 저장소 하나만, Actions 읽기·쓰기 권한의 fine-grained 토큰. 없으면 아무것도 하지 않는다.
- *   넣기: proxy/ 에서 `npx wrangler secret put GH_DISPATCH_TOKEN --config watchdog/wrangler.toml`
+ *   넣기: proxy/ 에서 `npm run set-watchdog-token`(붙여 넣으라고 묻는다)
  * 배포: proxy/ 에서 `npm run deploy-watchdog`. 로그: `npx wrangler tail rfg-watchdog`.
  */
 import { decide, type RunInfo } from './decide';

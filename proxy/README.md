@@ -43,7 +43,7 @@ node scripts/inspect.mjs --source yahoo --symbol SPX --save
 `.env` 만(gitignore). 키 값은 채팅·스크린샷·로그에 넣지 않는다. 로그는 `api_key=` 뒤를 자동으로 가린다(`src/log.ts`, 테스트로 고정).
 GitHub Actions 에서는 `FRED_API_KEY`, `YAHOO_PROXY_URL`(야후는 직접 접속이 429 — Cloudflare Worker 프록시. CNN 예비 경로로도 쓴다), `HEALTHCHECKS_PING_URL`(선택)을 Secrets 에 둔다. 게시는 GitHub Pages 라 Cloudflare 키는 필요 없다.
 `.env` 의 `CLOUDFLARE_API_TOKEN`·`CLOUDFLARE_ACCOUNT_ID` 는 Worker 배포(`npm run deploy-yahoo-proxy`, `npm run deploy-watchdog`)에만 쓴다.
-감시 워커(`watchdog/`)의 `GH_DISPATCH_TOKEN` 은 Worker 비밀값에만 둔다(`npx wrangler secret put GH_DISPATCH_TOKEN --config watchdog/wrangler.toml`).
+감시 워커(`watchdog/`)의 `GH_DISPATCH_TOKEN` 은 Worker 비밀값에만 둔다(`npm run set-watchdog-token`).
 
 ## 실패 모드
 

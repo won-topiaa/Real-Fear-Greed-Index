@@ -72,7 +72,7 @@ GitHub Actions `collect` 가 수집 → 계산 → 웹 빌드 → GitHub Pages �
 | 공개 레포 60일 비활성으로 예약 실행 꺼짐 | 마지막 커밋이 50일을 넘으면 빈 커밋(keepalive) |
 
 - 설정: Actions Secrets `FRED_API_KEY`, `YAHOO_PROXY_URL`(쉼표 목록 — 실명이 든 workers.dev 주소라 Secret 으로만), Variables `PAGES_HOST`. 감시 워커는 Worker 비밀값 `GH_DISPATCH_TOKEN`(이 저장소만, Actions 읽기·쓰기 fine-grained 토큰)이 있어야 돈다.
-- 수동 게시: `gh workflow run collect`. 워커 배포: `cd proxy && npm run deploy-yahoo-proxy` · `npm run deploy-watchdog`. 감시 로그: `npx wrangler tail rfg-watchdog`.
+- 수동 게시: `gh workflow run collect`. 워커 배포: `cd proxy && npm run deploy-yahoo-proxy` · `npm run deploy-watchdog`, 감시 토큰 넣기: `npm run set-watchdog-token`. 감시 로그: `npx wrangler tail rfg-watchdog`.
 - 장애 대응은 `docs/runbook.md` §7.
 
 ## 구조

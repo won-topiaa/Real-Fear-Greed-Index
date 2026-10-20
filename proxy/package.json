@@ -17,7 +17,8 @@
     "inspect": "node scripts/inspect.mjs",
     "build-web": "tsc -p ../web && node scripts/build-web.mjs",
     "deploy-yahoo-proxy": "set -a && . ./.env && set +a && wrangler deploy --config yahoo-proxy/wrangler.toml",
-    "deploy-watchdog": "set -a && . ./.env && set +a && wrangler deploy --config watchdog/wrangler.toml"
+    "deploy-watchdog": "set -a && . ./.env && set +a && wrangler deploy --config watchdog/wrangler.toml",
+    "set-watchdog-token": "set -a && . ./.env && set +a && wrangler secret put GH_DISPATCH_TOKEN --config watchdog/wrangler.toml"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
