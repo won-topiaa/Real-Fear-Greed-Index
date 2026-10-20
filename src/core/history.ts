@@ -22,31 +22,36 @@ export interface BuildHistoryInput {
  * components 는 최신 행의 세부 지표(원시값은 비율 그대로, 백분위는 소수 2자리).
  */
 export function buildHistory(input: BuildHistoryInput): RfgHistory {
-  const days = input.days ?? HISTORY_MAX_DAYS;
   const markets = {} as RfgHistory['markets'];
-  for (const sym of SYMBOLS) {
-    const rows = input.rows[sym];
-    const last = rows.length - 1;
-    const lastRow = rows[last];
-    if (lastRow == null) throw new Error(`[buildHistory] no rows for ${sym}`);
-    const c = input.components[sym];
-    const at = <T,>(xs: readonly (T | null)[]): T | null => xs[last] ?? null;
-    let start = Math.max(0, rows.length - days);
-    while (start < last && rows[start]?.rfg == null) start++;
-    markets[sym] = {
-      rows: rows.slice(start).map((r) => ({ date: r.date, rfg: r2(r.rfg), p: r2(r.p) })),
-      components: {
-        date: lastRow.date,
-        dd: at(c.dd),
-        disp: at(c.disp),
-        rv: at(c.rv),
-        pdd: r2(at(c.pdd)),
-        pdisp: r2(at(c.pdisp)),
-        prv: r2(at(c.prv)),
-      },
-    };
-  }
+  for (const sym of SYMBOLS) markets[sym] = buildHistoryMarket(sym, input.rows[sym], input.components[sym], input.days);
   return { schemaVersion: 1, generatedAtUtc: input.generatedAtUtc, markets };
+}
+
+/** 한 지수의 이력 블록. 한 지수만 새로 계산된 날(partial) 수집 잡이 다른 지수의 이전 블록과 합칠 때 쓴다. */
+export function buildHistoryMarket(
+  sym: IndexSymbol,
+  rows: readonly RfgRow[],
+  c: ComponentSeries,
+  days: number = HISTORY_MAX_DAYS,
+): RfgHistory['markets'][IndexSymbol] {
+  const last = rows.length - 1;
+  const lastRow = rows[last];
+  if (lastRow == null) throw new Error(`[buildHistory] no rows for ${sym}`);
+  const at = <T,>(xs: readonly (T | null)[]): T | null => xs[last] ?? null;
+  let start = Math.max(0, rows.length - days);
+  while (start < last && rows[start]?.rfg == null) start++;
+  return {
+    rows: rows.slice(start).map((r) => ({ date: r.date, rfg: r2(r.rfg), p: r2(r.p) })),
+    components: {
+      date: lastRow.date,
+      dd: at(c.dd),
+      disp: at(c.disp),
+      rv: at(c.rv),
+      pdd: r2(at(c.pdd)),
+      pdisp: r2(at(c.pdisp)),
+      prv: r2(at(c.prv)),
+    },
+  };
 }
 
 export type HistoryParseResult = { ok: true; value: RfgHistory } | { ok: false; error: { path: string } };

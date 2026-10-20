@@ -201,7 +201,13 @@ function freshnessOf(s: State): { blocked: boolean; level: 'ok' | 'warn' | 'bad'
   const basis = formatBasisLine(market);
   if (fresh.level === 'stale') return { blocked: true, level: 'bad', text: COPY.freshness('stale', fresh.tradingDaysBehind) };
   if (market.latest.rfg == null) return { blocked: true, level: 'warn', text: COPY.fgMissing };
-  if (fresh.level === 'delayed') return { blocked: false, level: 'warn', text: `${basis} · ${COPY.freshness('delayed', fresh.tradingDaysBehind)}` };
+  // 점수의 60% 인 심리가 종가보다 이전 날짜 값이면 '최신'이라 하지 않는다
+  const { fgDate, fgStaleDays } = market.latest;
+  const fgNote = fgDate != null && fgStaleDays != null && fgStaleDays > 0 ? WEB_COPY.fgStale(formatTradingDate(fgDate, 'short')) : null;
+  if (fresh.level === 'delayed') {
+    return { blocked: false, level: 'warn', text: [basis, COPY.freshness('delayed', fresh.tradingDaysBehind), fgNote].filter(Boolean).join(' · ') };
+  }
+  if (fgNote) return { blocked: false, level: 'warn', text: `${basis} · ${fgNote}` };
   return { blocked: false, level: 'ok', text: WEB_COPY.statusFresh(basis) };
 }
 

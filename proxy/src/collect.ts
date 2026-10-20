@@ -6,13 +6,13 @@
 import { NYSE_HOLIDAYS, expectedLatestTradingDate, nyDateOf } from '../../src/core/calendar';
 import { DATA_GATES, RFG_PARAMS, minClosesForSnapshot } from '../../src/core/constants';
 import { computeComponentSeries } from '../../src/core/damage';
-import { buildHistory } from '../../src/core/history';
+import { buildHistoryMarket } from '../../src/core/history';
 import { computeRfgSeries } from '../../src/core/rfg';
 import { buildSnapshot } from '../../src/core/snapshot';
-import type { IndexSymbol, MarketBlock, MarketFlag, PricePoint, RfgRow, RfgSnapshot, ValidationIssue } from '../../src/core/types';
+import type { IndexSymbol, MarketBlock, MarketFlag, PricePoint, RfgHistory, RfgRow, RfgSnapshot, ValidationIssue } from '../../src/core/types';
 import { DISCLAIMER } from '../../src/text/copy';
 import { silentLogger } from './log';
-import { publishHistory, publishSnapshot, readPublishedSnapshot, writeHeadersFile, writeStatus, type StatusJson } from './publish';
+import { publishHistory, publishSnapshot, readPublishedHistory, readPublishedSnapshot, writeHeadersFile, writeStatus, type StatusJson } from './publish';
 import { collectFg } from './sources/fg';
 import { PRICE_ADAPTERS, selectPriceSeries } from './sources/price';
 import { FileStore } from './store/FileStore';
@@ -199,20 +199,23 @@ async function collectInner(ctx: Ctx, opts: CollectOptions, runAtUtc: string, ru
     try {
       await publishSnapshot(opts.outDir, snapshot);
       ctx.log.info(`published snapshot for ${expected} (${status.result}${unchanged ? ', unchanged' : ''})`);
-      // 1년 이력(웹 화면용)은 두 지수가 모두 새로 계산된 경우에만 바꾼다. 아니면 이전 history.json 을 그대로 둔다.
-      if (rows.SPX && rows.NDX && prices.SPX && prices.NDX) {
-        try {
-          await publishHistory(
-            opts.outDir,
-            buildHistory({
-              rows: { SPX: rows.SPX, NDX: rows.NDX },
-              components: { SPX: computeComponentSeries(prices.SPX), NDX: computeComponentSeries(prices.NDX) },
-              generatedAtUtc: runAtUtc,
-            }),
-          );
-        } catch (e) {
-          errors.push(`history: ${e instanceof Error ? e.message : 'publish failed'}`);
+      // 이력(웹 화면용)도 스냅샷처럼 지수마다: 새로 계산한 지수는 새 이력, 이전 블록을 쓴 지수는 이전 이력.
+      // 화면은 스냅샷의 오늘 값과 이력의 전일·1개월 값을 함께 쓰므로 두 파일의 날짜가 지수마다 같아야 한다.
+      // 이전 이력이 없어 한 지수라도 채울 수 없으면 바꾸지 않는다.
+      try {
+        const prevHistory = await readPublishedHistory(opts.outDir);
+        const historyMarkets: Partial<RfgHistory['markets']> = {};
+        for (const sym of SYMBOLS) {
+          const symRows = rows[sym];
+          const symPrices = prices[sym];
+          if (symRows && symPrices) historyMarkets[sym] = buildHistoryMarket(sym, symRows, computeComponentSeries(symPrices));
+          else if (prevHistory) historyMarkets[sym] = prevHistory.markets[sym];
         }
+        if (historyMarkets.SPX && historyMarkets.NDX) {
+          await publishHistory(opts.outDir, { schemaVersion: 1, generatedAtUtc: runAtUtc, markets: { SPX: historyMarkets.SPX, NDX: historyMarkets.NDX } });
+        }
+      } catch (e) {
+        errors.push(`history: ${e instanceof Error ? e.message : 'publish failed'}`);
       }
     } catch (e) {
       errors.push(e instanceof Error ? e.message : 'publish failed');

@@ -65,6 +65,20 @@ export async function readPublishedSnapshot(outDir: string): Promise<RfgSnapshot
   return r.ok ? r.value : null;
 }
 
+/** 이전 게시 이력. 없거나 깨졌거나 계약을 통과하지 못하면 null. partial 인 날 실패한 지수의 이력을 이어 쓰는 데 쓴다. */
+export async function readPublishedHistory(outDir: string): Promise<RfgHistory | null> {
+  let raw: unknown;
+  try {
+    raw = await readJsonFile<unknown>(join(outDir, HISTORY_PATH));
+  } catch (e) {
+    if (e instanceof SyntaxError) return null;
+    throw e;
+  }
+  if (raw == null) return null;
+  const r = parseHistory(raw);
+  return r.ok ? r.value : null;
+}
+
 export async function publishSnapshot(outDir: string, snapshot: RfgSnapshot): Promise<void> {
   const r = parseSnapshot(JSON.parse(JSON.stringify(snapshot)));
   if (!r.ok) throw new Error(`[publish] snapshot failed self-validation at ${r.error.path} (${r.error.code})`);

@@ -90,6 +90,8 @@ export const WEB_COPY = {
   back: '홈',
   infoLabel: '계산 방법 보기',
   statusFresh: (basis: string): string => `${basis} · 최신`,
+  /** CNN 값이 종가보다 이전 날짜 것일 때(CNN 실패·누락, DESIGN §3.4) 상태 띠에 붙인다 */
+  fgStale: (d: string): string => `심리 지수는 ${d} 값`,
   eventsTitle: '주요 사건 때의 지수',
   eventsNote: (d: string): string => `지수는 ${d}부터 계산돼요. 그 이전(2020년 3월 코로나 폭락 등)은 CNN 데이터가 없어 볼 수 없어요.`,
   eventPick: '사건 선택',

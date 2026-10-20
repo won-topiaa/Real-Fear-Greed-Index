@@ -126,6 +126,29 @@ test('한 지수의 모든 소스가 죽으면 이전 블록을 유지(partial);
   }
 });
 
+test('partial 인 날에도 이력은 지수마다 스냅샷과 같은 날짜까지 — 새로 계산한 지수는 새 이력, 실패한 지수는 이전 이력', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'rfg-collect-'));
+  try {
+    // 전날 실행(기대 거래일 09-10) → 두 지수 모두 09-10 까지
+    const prev = await run(dir, routesFor('normal'), '2026-09-11T01:00:00.000Z');
+    assert.equal(prev.result, 'ok');
+    assert.equal(prev.snapshot?.markets.SPX.closeDate, '2026-09-10');
+    // 다음 날 NDX 만 실패 → SPX 는 09-11, NDX 는 이전 블록(09-10)
+    const partial = await run(dir, routesFor('normal', { ndxDown: true }));
+    assert.equal(partial.result, 'partial');
+    const history = parseHistory(JSON.parse(await readFile(join(dir, 'public', HISTORY_PATH), 'utf8')));
+    assert.ok(history.ok);
+    if (history.ok) {
+      for (const sym of ['SPX', 'NDX'] as const) {
+        assert.equal(history.value.markets[sym].rows.at(-1)?.date, partial.snapshot?.markets[sym].closeDate, `${sym} rows`);
+        assert.equal(history.value.markets[sym].components.date, partial.snapshot?.markets[sym].closeDate, `${sym} components`);
+      }
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('CNN 이 막히고 히스토리도 없으면 fg-missing 으로 게시(P 만 있음)', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'rfg-collect-'));
   try {

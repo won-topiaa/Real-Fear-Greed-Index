@@ -69,7 +69,7 @@ jobs:
         run: |
           mkdir -p public/v1
           curl -fsSL "https://${PAGES_HOST}/v1/snapshot.json" -o public/v1/snapshot.json || true
-          # 이력은 두 지수가 모두 새로 계산될 때만 바뀐다 — 실패한 날 배포가 이전 이력을 지우지 않도록 받아 둔다
+          # 이력은 지수마다 이어 쓴다(실패한 지수는 이전 이력) — 실패한 날 배포가 이전 이력을 지우지 않도록 받아 둔다
           curl -fsSL "https://${PAGES_HOST}/v1/history.json" -o public/v1/history.json || true
         env:
           PAGES_HOST: ${{ vars.PAGES_HOST }}
