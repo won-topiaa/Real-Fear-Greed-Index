@@ -25,6 +25,7 @@
     "src/**/*.ts",
     "scripts/**/*.ts",
     "test/**/*.ts",
+    "watchdog/**/*.ts",
     "../src/core/**/*.ts",
     "../src/text/**/*.ts"
   ],

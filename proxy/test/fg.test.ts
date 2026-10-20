@@ -167,3 +167,27 @@ test('CNN 요청 시작일: 이력이 없거나 앞·뒤가 비면 2020-07-15 �
   assert.equal(cnnRequestStart([pt('2020-07-15'), pt('2026-10-13')], '2026-10-14'), '2026-09-14');
   assert.equal(cnnUrl('2019-01-01').endsWith(`/graphdata/${CNN_EARLIEST}`), true); // 그 이전은 500 이라 당긴다
 });
+
+test('CNN 직접 접속이 막히면 Cloudflare 프록시로 받고 fallbacks 에 남긴다', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'rfg-fg-'));
+  try {
+    const hist: FgPoint[] = [{ date: '2026-09-11', value: 41, source: 'cnn-historical' }];
+    const calls: string[] = [];
+    const f = fakeFetch(
+      [
+        { match: (u) => u.startsWith('https://production.dataviz.cnn.io'), status: 418, body: 'blocked' },
+        { match: (u) => u.startsWith('https://proxy.test/'), body: cnnJson(hist, { score: 41, timestamp: '2026-09-11T23:00:00+00:00' }) },
+      ],
+      calls,
+    );
+    const c = { ...ctx(f), env: { ...DEFAULT_ENV, YAHOO_PROXY_URL: 'https://proxy.test/' } };
+    const r = await collectFg(c, new FileStore(dir), '2026-09-11');
+    assert.equal(r.report.status, 'ok');
+    assert.deepEqual(r.report.fallbacks, ['#1 http_418']);
+    assert.equal(r.history.at(-1)?.value, 41);
+    assert.equal(calls.length, 2);
+    assert.ok(calls[1]?.startsWith(`https://proxy.test/?url=${encodeURIComponent(cnnUrl('2020-07-15'))}`));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

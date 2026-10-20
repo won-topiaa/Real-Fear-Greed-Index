@@ -62,7 +62,7 @@ test('소스 실패·프록시 미설정·교차검증 경고, 수집 실패는 
   assert.match(r.errors[0] ?? '', /수집 실패/);
   assert.ok(r.warnings.some((w) => w.startsWith('yahoo/NDX failed: http_429')));
   assert.ok(r.warnings.some((w) => w.startsWith('cnn failed')));
-  assert.ok(r.warnings.some((w) => w.startsWith('yahoo/SPX: 앞선 프록시 실패(#1 http_403)')));
+  assert.ok(r.warnings.some((w) => w.startsWith('yahoo/SPX: 앞선 경로 실패(#1 http_403)')));
   assert.ok(r.warnings.some((w) => w.includes('source-mismatch')));
   assert.ok(r.warnings.some((w) => w.includes('YAHOO_PROXY_URL')));
 });

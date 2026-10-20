@@ -235,11 +235,13 @@ npm run deploy
 |---|---|---|
 | GitHub 실패 메일 "collect" (Freshness check) | 실패한 실행의 요약(게시 점검 표·⚠️·❌) | `NDX 가 N거래일 늦다` 면 아래 줄. `수집 실패`면 Collect 로그. `NYSE_HOLIDAYS` 면 `src/core/calendar.ts` 에 다음 해 휴장일 추가 |
 | 앱에 "N거래일 전 값이에요" 배지 | `status.json` 의 `sources[]` | FRED `date_lag` + yahoo `failed` 면 야후 프록시가 둘 다 막힌 것: `curl "$YAHOO_PROXY_URL?url=…"` 로 확인, 전용 프록시는 `cd proxy && npm run deploy-yahoo-proxy` 로 다시 배포. 그동안 `wait-for-fred` 잡이 FRED 를 기다리고(시한 종가 16시간 뒤) 다음 예약 실행이 다시 시도한다. 급하면 `gh workflow run collect` |
-| 실행 요약에 `앞선 프록시 실패 — 예비 프록시로 받았다` | `status.json` 의 `sources[yahoo].fallbacks` | 전용 프록시(`rfg-yahoo-proxy`)가 실패 중. 위와 같이 확인·재배포 |
+| 실행 요약에 `yahoo/…: 앞선 경로 실패 — 예비 경로로 받았다` | `status.json` 의 `sources[yahoo].fallbacks` | 전용 프록시(`rfg-yahoo-proxy`)가 실패 중. 위와 같이 확인·재배포 |
+| 실행 요약에 `cnn: 앞선 경로 실패(#1 http_4xx) — 예비 경로로 받았다` | `status.json` 의 `sources[cnn].fallbacks` | CNN 이 러너 IP 의 직접 접속을 막아 Cloudflare 프록시로 받았다(값은 정상). 계속되면 CNN 응답 형태·차단을 `npm run inspect -- --source cnn` 으로 확인. 프록시까지 막히면 심리는 마지막 값(5일까지, 화면에 '심리 지수는 M/D 값')을 쓰다가 결측이 된다 |
 | 앱이 지수를 `—` 로 막음(stale) | 잡이 3거래일 넘게 실패 | Actions 로그·healthchecks 확인. 러너 차단이면 §5 의 실행 위치 이동 |
 | "심리 데이터를 아직 못 받았어요" | `sources[cnn].error` | `http_403`/`schema` 면 inspect 로 형태 재확인. 히스토리 마지막 값이 5달력일 안이면 자동 폴백 중 |
 | 앱 "업데이트가 필요해요" | 스냅샷 `schemaVersion` 변경 | 의도한 변경이면 앱 재배포. 아니면 파이프라인 롤백 |
 | 홈에 "샘플 데이터" 배지가 배포본에서 보임 | 목 모드로 배포됨 | 즉시 `apiBaseUrl` 채워 재배포. predeploy 를 우회했는지 확인 |
+| 사이트가 하루 넘게 안 바뀌는데 실패 메일도 없음 | Actions 탭에 예약 실행이 없음 | GitHub 예약 실행이 멈춘 것. 감시 워커가 돌렸어야 한다: `cd proxy && npx wrangler tail rfg-watchdog` 로 매시 17분 로그(`no: …`·`dispatched: …`·`error: …`) 확인. `skip: GH_DISPATCH_TOKEN 없음` 이면 토큰을 넣는다(`npx wrangler secret put GH_DISPATCH_TOKEN --config watchdog/wrangler.toml`), `error: 실행 목록 401` 이면 토큰 만료 → 새로 만들어 같은 명령. 급하면 `gh workflow run collect` |
 | healthchecks 알림 | 잡이 안 돌았음 | Actions 스케줄 비활성(60일 비활성) 여부 → 수동 실행 후 레포에 커밋 1건. keepalive 단계 로그(`last commit N days ago`)와 push 경고 확인 |
 
 ---

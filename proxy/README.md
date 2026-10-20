@@ -41,14 +41,17 @@ node scripts/inspect.mjs --source yahoo --symbol SPX --save
 ## 비밀값
 
 `.env` 만(gitignore). 키 값은 채팅·스크린샷·로그에 넣지 않는다. 로그는 `api_key=` 뒤를 자동으로 가린다(`src/log.ts`, 테스트로 고정).
-GitHub Actions 에서는 `FRED_API_KEY`, `YAHOO_PROXY_URL`(야후는 직접 접속이 429 — Cloudflare Worker 프록시), `HEALTHCHECKS_PING_URL`(선택)을 Secrets 에 둔다. 게시는 GitHub Pages 라 Cloudflare 키는 필요 없다.
+GitHub Actions 에서는 `FRED_API_KEY`, `YAHOO_PROXY_URL`(야후는 직접 접속이 429 — Cloudflare Worker 프록시. CNN 예비 경로로도 쓴다), `HEALTHCHECKS_PING_URL`(선택)을 Secrets 에 둔다. 게시는 GitHub Pages 라 Cloudflare 키는 필요 없다.
+`.env` 의 `CLOUDFLARE_API_TOKEN`·`CLOUDFLARE_ACCOUNT_ID` 는 Worker 배포(`npm run deploy-yahoo-proxy`, `npm run deploy-watchdog`)에만 쓴다.
+감시 워커(`watchdog/`)의 `GH_DISPATCH_TOKEN` 은 Worker 비밀값에만 둔다(`npx wrangler secret put GH_DISPATCH_TOKEN --config watchdog/wrangler.toml`).
 
 ## 실패 모드
 
 | 상황 | 동작 |
 |---|---|
-| 어떤 소스도 기대 거래일까지 없음 | 새 스냅샷 없음(이전 유지), `status.result = partial|failed`, 01:00 UTC 재시도 |
-| 한 지수만 실패 | 그 지수는 이전 스냅샷 블록 유지(`partial`) |
-| CNN 실패 | 저장소의 마지막 관측값으로 as-of 조인(5달력일), 넘으면 `fg-missing` |
+| 어떤 소스도 기대 거래일까지 없음 | 새 스냅샷 없음(이전 유지), `status.result = partial|failed`, 다음 예약 실행·`wait-for-fred`·감시 워커가 다시 돌린다 |
+| 한 지수만 실패 | 그 지수는 이전 스냅샷·이력 블록 유지(`partial`). 새로 계산한 지수의 이력은 오늘까지 |
+| CNN 직접 접속 실패 | Cloudflare 프록시로 다시 받는다(`sources[cnn].fallbacks`) |
+| CNN 실패(프록시까지) | 저장소의 마지막 관측값으로 as-of 조인(5달력일, 화면에 '심리 지수는 M/D 값'), 넘으면 `fg-missing` |
 | 주말·휴장일 | `unchanged: true` 로 정상 종료 |
 | 스냅샷 자기검증 실패 | 게시 안 함(버그), `failed` |

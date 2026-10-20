@@ -8,6 +8,7 @@
 import { addCalendarDays, nyDateOf } from '../../../src/core/calendar';
 import type { FgPoint, IsoDate } from '../../../src/core/types';
 import type { Env } from '../types';
+import { yahooProxies } from './yahoo';
 
 export const CNN_URL = 'https://production.dataviz.cnn.io/index/fearandgreed/graphdata';
 /** 날짜를 붙이면 그날 이후 이력을 준다(없으면 최근 1년). 2020-07-15 이전 날짜는 500 이라 그보다 앞으로는 요청하지 않는다(2026-10-15 실측). */
@@ -17,6 +18,15 @@ export const CNN_INCREMENTAL_DAYS = 30;
 
 export function cnnUrl(from: IsoDate): string {
   return `${CNN_URL}/${from < CNN_EARLIEST ? CNN_EARLIEST : from}`;
+}
+
+/**
+ * 직접 주소 → Cloudflare 프록시(YAHOO_PROXY_URL 의 주소들, 앞에서부터) 순. 비공식 경로라 CNN 이 러너 IP 를 막는 날을 대비한다.
+ * 전용 프록시(proxy/yahoo-proxy/)는 야후 chart 와 이 graphdata 주소만 통과시킨다. 2026-10-20 Cloudflare 경유 응답 확인.
+ */
+export function cnnUrls(from: IsoDate, env: Env): string[] {
+  const direct = cnnUrl(from);
+  return [direct, ...yahooProxies(env).map((p) => `${p}${p.includes('?') ? '&' : '?'}url=${encodeURIComponent(direct)}`)];
 }
 
 /**

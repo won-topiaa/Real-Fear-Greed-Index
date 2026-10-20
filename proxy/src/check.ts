@@ -59,7 +59,7 @@ export function checkPublished(input: CheckInput): CheckResult {
       if (s.status === 'failed' || s.status === 'invalid' || s.status === 'disabled') {
         r.warnings.push(`${label} ${s.status}: ${s.error ?? ''}`.trim());
       } else if (s.fallbacks?.length) {
-        r.warnings.push(`${label}: 앞선 프록시 실패(${s.fallbacks.join(', ')}) — 예비 프록시로 받았다`);
+        r.warnings.push(`${label}: 앞선 경로 실패(${s.fallbacks.join(', ')}) — 예비 경로로 받았다`);
       }
     }
     for (const sym of SYMBOLS) {

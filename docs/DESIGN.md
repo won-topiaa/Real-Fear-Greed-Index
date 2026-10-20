@@ -59,7 +59,7 @@
 ## 2. 시스템 아키텍처
 
 ```
-┌─ 스케줄 잡: GitHub Actions cron 하루 5회(22:23Z 본실행 + 예비 4) + FRED 대기 + 게시 점검 ──┐
+┌─ 스케줄 잡: GitHub Actions cron 하루 8회 + 감시 워커(Cloudflare cron) + FRED 대기 + 게시 점검 ┐
 │  proxy/src/collect.ts                                                                      │
 │   sources/cnn.ts    ─ FG 현재값(+historical 백필)  ─┐  각 어댑터: fetch → parse → validate   │
 │   sources/fred.ts   ─ SP500, NASDAQ100 (키)        ├─ → normalize → DailySeries              │
@@ -118,7 +118,8 @@
 | 데이터 | 소스 | 공식 | 키 | 알려진 형태 | 우선순위 |
 |---|---|---|---|---|---|
 | FG 현재값·약 1년 히스토리 | CNN `https://production.dataviz.cnn.io/index/fearandgreed/graphdata` | **비공식** | 없음. 브라우저 User-Agent 필요 **[검증 필요]** | `fear_and_greed: {score, rating, timestamp?, previous_close?...}`, `fear_and_greed_historical.data: [{x: epoch ms, y, rating}]` **[검증 필요]** | 1 |
-| FG | 자기 저장소 `fg/history.json` | — | — | CNN 실패 시 마지막 관측값(신선도 게이트 안에서만) | 폴백 |
+| 〃 | 같은 CNN 주소를 Cloudflare 프록시(`YAHOO_PROXY_URL` 의 주소들, 전용 Worker 먼저)로 | 비공식 | 없음 | 직접 접속이 막힌 날(러너 IP 차단 등)의 예비 경로(2026-10-20). 쓰면 status `sources[cnn].fallbacks` | 1′ |
+| FG | 자기 저장소 `fg/history.json` | — | — | CNN 실패 시 마지막 관측값(신선도 게이트 안에서만). 화면에 '심리 지수는 M/D 값' | 폴백 |
 | SPX/NDX 종가 | FRED `series/observations?series_id=SP500`(`NASDAQ100`), `file_type=json` | 공식 | `FRED_API_KEY` | `observations: [{date, value}]`, 휴장일 `value: "."`, 최근 10년. 반영 시각(2026-10-16·17 확인): SP500 19:02 CT ≈ 00:00Z, NASDAQ100 22:37 CT ≈ 03:37Z — 둘 다 22:30Z 본실행보다 늦다(§7.2 FRED 대기) | 1 |
 | 〃 | Stooq `https://stooq.com/q/d/l/?s=^spx&i=d`(`^ndx`) | 비공식 | 없음 | CSV `Date,Open,High,Low,Close,Volume`; 데이터 없으면 200 + `No data` **[검증 필요]** | 2 |
 | 〃 | Yahoo `v8/finance/chart/^GSPC?period1=…&period2=…&interval=1d`(`^NDX`, 조회 창은 FRED 와 같게: SPX 10년·NDX 13년) | 비공식 | 직접은 429 → Secret `YAHOO_PROXY_URL`(Cloudflare Worker `?url=`) 경유 | `chart.result[0].timestamp[]`, `indicators.quote[0].close[]`(null 포함), 장중엔 오늘 봉이 붙음(기대 거래일 뒤는 버림). 미국 마감 직후 값이 있고 FRED 와 차이 NDX 최대 0.085%·SPX 0.12%(2026-10-17 확인) | 3 |
@@ -710,13 +711,15 @@ collect:
 ```
 
 - 주말·휴장일: `expected`가 이전과 같으면 `unchanged: true`로 정상 종료.
-- 예약 시각(2026-10-17): GitHub 예약 실행은 매일 2~6시간 늦고 부하가 크면 건너뛰기도 해서 정각을 피한 5개(22:23·23:53·01:23·03:53·07:23Z)에 건다. 수집은 같은 날 여러 번 돌아도 결과가 같고(unchanged) 30초 남짓이라 먼저 도는 실행이 갱신하고 나머지는 예비다. 22:23Z 는 나스닥 100 공식 종가(17:15 ET) 뒤다(EDT·EST 모두).
-- FRED 가 늦는 날은 먼저 Yahoo 가 같은 실행에서 그 지수를 채운다(§3.2 우선순위 3). 프록시는 `YAHOO_PROXY_URL` 에 쉼표로 여러 개 — 레포의 전용 Worker(`proxy/yahoo-proxy/`, 야후 chart 주소만 통과) → 예비 프록시 순으로 시도하고, 예비로 받았으면 status 의 `fallbacks` 에 남는다. 아래 FRED 대기는 Yahoo 도 실패한 날의 예비다.
+- 예약 시각(2026-10-17, 2026-10-20 8개로): GitHub 예약 실행은 매일 2~7시간 늦고 부하가 크면 건너뛰기도 해서 정각을 피한 8개(22:23·23:53·00:37·01:23·03:53·05:37·07:23·10:07Z)에 건다. 수집은 같은 날 여러 번 돌아도 결과가 같고(unchanged) 30초 남짓이라 먼저 도는 실행이 갱신하고 나머지는 예비다. 22:23Z 는 나스닥 100 공식 종가(17:15 ET) 뒤다(EDT·EST 모두).
+- FRED 가 늦는 날은 먼저 Yahoo 가 같은 실행에서 그 지수를 채운다(§3.2 우선순위 3). 프록시는 `YAHOO_PROXY_URL` 에 쉼표로 여러 개 — 레포의 전용 Worker(`proxy/yahoo-proxy/`, 야후 chart 와 CNN graphdata 주소만 통과) → 예비 프록시 순으로 시도하고, 예비로 받았으면 status 의 `fallbacks` 에 남는다. 아래 FRED 대기는 Yahoo 도 실패한 날의 예비다.
 - FRED 대기(2026-10-17): FRED 는 NASDAQ100 을 22:37 CT(≈ 03:37Z)에야 올려 22:30Z·01:00Z 실행보다 늦고, GitHub 예약 실행은 매일 2~6시간 늦게 돈다(측정: 22:30 → 00:13~03:06Z, 01:00 → 05:13~07:10Z). 그래서 본실행에서 FRED 가 `date_lag` 인 지수가 있으면 `wait-for-fred` 잡이 FRED 최신 관측일만 10분마다 확인하고(`cli.ts wait`, `src/wait.ts`), 올라오면 collect 워크플로를 `workflow_dispatch` 로 다시 돌린다. 시한은 기대 거래일 종가 16시간 뒤(EDT 12:00Z)·최대 5시간. 두 지수가 다 늦으면 먼저 올라온 쪽으로 다시 돌고, 다시 돈 실행의 wait 잡이 나머지를 기다린다.
+- 감시 워커(2026-10-20, `proxy/watchdog/`, Cloudflare cron 매시 17분, 공개 주소 없음): GitHub 예약 실행이 통째로 멈추면 게시 점검도 돌지 않아 아무도 모른다. 그래서 GitHub 밖에서 게시된 snapshot.json 을 보고, 기대 거래일 종가 2.5시간 뒤(EDT 22:30Z)가 지났는데 늦은 지수가 있으면 collect 를 `workflow_dispatch` 로 돌린다. 도는 실행이 있거나 110분 안에 만든 실행이 있으면 맡기고, 한 거래일에 수동 실행이 4번 쌓이면 멈춘다(소스가 죽은 날 실패 메일이 쏟아지지 않게). 판단은 순수 함수 `decide.ts`(테스트). 토큰 `GH_DISPATCH_TOKEN`(이 저장소만, Actions 읽기·쓰기 fine-grained)이 Worker 비밀값에 없으면 아무것도 하지 않는다.
+- Pages 배포는 실패하면 1분 뒤 한 번 더 한다(2026-10-20). 두 번째도 실패하면 잡 실패 → 메일.
 - 대기 잡은 한 번에 하나(concurrency `wait-for-fred`, 새 것이 이전 것을 취소). 수집 잡의 concurrency 는 그 잡에만 걸어 대기 중에도 다른 예약 실행의 수집이 막히지 않는다.
 - 게시 점검(`cli.ts check`, `src/check.ts`): 매 수집 뒤 게시본을 본다. 기대 거래일 종가 12시간 뒤(EDT 08:00Z = 17:00 KST)에도 하루 이상 늦은 지수가 있으면 단계를 실패시켜 GitHub 실패 메일로 알린다(그 전에는 경고). 소스 실패·예비 프록시 사용·프록시 미설정·교차검증 경고·휴장일 목록 만료(60일 안)도 경고로 실행 요약에 남긴다.
 - Actions 러너 IP가 CNN 봇 방어에 걸리면 **[검증 필요]** 수집기는 `node proxy/dist/collect.js --out ./public` 한 줄이라 집 맥의 launchd에서 같은 명령을 돌리고 결과를 Pages 아티팩트로 올린다(워크플로 수동 실행이 가장 간단). 실행 위치만 바뀌고 코드는 같다.
-- GitHub는 공개 레포가 60일간 저장소 활동(커밋 등)이 없으면 스케줄 워크플로를 끈다. 워크플로 실행은 활동으로 치지 않으므로 collect.yml 마지막 단계(keepalive)가 마지막 커밋이 50일을 넘으면 빈 커밋을 push 한다(2026-10-15). 그래도 멈추는 경우는 healthchecks 데드맨 핑으로 잡는다.
+- GitHub는 공개 레포가 60일간 저장소 활동(커밋 등)이 없으면 스케줄 워크플로를 끈다. 워크플로 실행은 활동으로 치지 않으므로 collect.yml 마지막 단계(keepalive)가 마지막 커밋이 50일을 넘으면 빈 커밋을 push 한다(2026-10-15). 그래도 멈추면 감시 워커가 늦은 게시본을 보고 직접 돌린다(healthchecks 데드맨 핑은 `HEALTHCHECKS_PING_URL` 을 넣으면 함께 쓴다).
 - 로그에 헤더·쿼리스트링을 찍지 않는다. `log.ts`가 `api_key=` 뒤를 마스킹한다(테스트).
 
 ---
@@ -843,9 +846,10 @@ collect:
 | 이용약관(CNN·S&P DJI) | 낮음~중 | 서비스 중단 | 파생값만 공개, 원시 종가·원문 히스토리 비공개, 출처 명시 |
 | 심사 반려(투자 권유 오인) | 중 | 출시 지연 | 행동 지시 문구 제거, 면책 상수, doctor 금지 단어 |
 | 목 데이터 배포 | 중 | 가짜 값 노출 | predeploy 차단 + "샘플 데이터" 배지 상시 |
-| 예약 실행 지연·누락(GitHub) | 높음(매일 2~6시간) | 갱신 지연 | 정각을 피한 예약 5개, 게시 점검 실패 메일 |
+| 예약 실행 지연·누락(GitHub) | 높음(매일 2~7시간) | 갱신 지연 | 정각을 피한 예약 8개, 감시 워커(GitHub 밖 cron), 게시 점검 실패 메일 |
+| CNN 차단(비공식 경로) | 중 | 심리 지연 → 결측 | Cloudflare 프록시 예비 경로, 마지막 값 5일 + '심리 지수는 M/D 값' 안내 |
 | 야후 프록시 정지 | 중 | FRED 가 늦는 날 하루 지연 | 프록시 2개(전용 → 예비), `fallbacks` 경고, FRED 대기, 게시 점검 |
-| 60일 비활성 시 cron 정지 | 중 | 조용한 정지 | keepalive 빈 커밋(50일) + healthchecks 데드맨 |
+| 60일 비활성 시 cron 정지 | 중 | 조용한 정지 | keepalive 빈 커밋(50일) + 감시 워커 |
 | 신선도 오판(휴장일·DST·기기 시계) | 중 | 잘못된 지연 표시 | 거래일 캘린더, 스냅샷 값 우선, DST 산술 테스트 |
 | 파라미터 변경 후 앱·잡 불일치 | 낮음 | 다른 숫자 | 스냅샷 `params` 동봉, 정보 화면 경고 |
 

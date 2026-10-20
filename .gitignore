@@ -33,3 +33,6 @@ research/data/
 research/out/*.csv
 research/__pycache__/
 !research/out/index_quality_top.csv
+
+# wrangler 임시 폴더(Worker 배포)
+.wrangler/

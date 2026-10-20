@@ -55,3 +55,20 @@ export async function fetchText(ctx: Ctx, url: string, headers: Record<string, s
   }
   throw lastErr ?? new HttpError('network', null, 'network');
 }
+
+/** 주소를 앞에서부터 시도해 첫 성공 응답을 돌려준다(fallbacks: 그 앞에서 실패한 주소들). 모두 실패하면 마지막 오류. */
+export async function fetchFirst(ctx: Ctx, urls: readonly string[], headers: Record<string, string>, label: string): Promise<{ res: FetchTextResult; fallbacks: string[] }> {
+  let lastErr: unknown = new Error('no url');
+  const fallbacks: string[] = [];
+  for (const [i, url] of urls.entries()) {
+    try {
+      return { res: await fetchText(ctx, url, headers), fallbacks };
+    } catch (e) {
+      lastErr = e;
+      const msg = e instanceof Error ? e.message : 'unknown';
+      fallbacks.push(`#${i + 1} ${msg.slice(0, 40)}`);
+      if (i < urls.length - 1) ctx.log.warn(`${label}: ${msg} via #${i + 1} — trying next`);
+    }
+  }
+  throw lastErr;
+}

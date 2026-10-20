@@ -6,7 +6,7 @@
 import { DATA_GATES, type DataGates } from '../../../src/core/constants';
 import type { IndexSymbol, IsoDate, PricePoint, PriceSource, ValidationIssue } from '../../../src/core/types';
 import { crossCheckPriceSeries, validatePriceSeries } from '../../../src/core/validate';
-import { fetchText, type FetchTextResult } from '../http';
+import { fetchFirst } from '../http';
 import type { Ctx, PriceAdapter, SourceReport } from '../types';
 import { fredAdapter } from './fred';
 import { stooqAdapter } from './stooq';
@@ -31,23 +31,6 @@ export interface SelectOptions {
 
 function sortByDate(series: PricePoint[]): PricePoint[] {
   return [...series].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-}
-
-/** 주소를 앞에서부터 시도해 첫 성공 응답을 돌려준다(fallbacks: 그 앞에서 실패한 주소들). 모두 실패하면 마지막 오류. */
-async function fetchFirst(ctx: Ctx, urls: readonly string[], headers: Record<string, string>, label: string): Promise<{ res: FetchTextResult; fallbacks: string[] }> {
-  let lastErr: unknown = new Error('no url');
-  const fallbacks: string[] = [];
-  for (const [i, url] of urls.entries()) {
-    try {
-      return { res: await fetchText(ctx, url, headers), fallbacks };
-    } catch (e) {
-      lastErr = e;
-      const msg = e instanceof Error ? e.message : 'unknown';
-      fallbacks.push(`#${i + 1} ${msg.slice(0, 40)}`);
-      if (i < urls.length - 1) ctx.log.warn(`${label}: ${msg} via #${i + 1} — trying next`);
-    }
-  }
-  throw lastErr;
 }
 
 export async function selectPriceSeries(ctx: Ctx, symbol: IndexSymbol, expected: IsoDate, opts: SelectOptions = {}): Promise<PriceSelection> {

@@ -6,10 +6,10 @@ import { mergeFgHistory } from '../../../src/core/align';
 import { nyDateOf } from '../../../src/core/calendar';
 import type { FgPoint, IsoDate, MarketFlag } from '../../../src/core/types';
 import { validateFgSeries } from '../../../src/core/validate';
-import { fetchText } from '../http';
+import { fetchFirst } from '../http';
 import type { FileStore } from '../store/FileStore';
 import type { Ctx, SourceReport } from '../types';
-import { cnnHeaders, cnnRequestStart, cnnUrl, normalizeCnnHistory, parseCnn, validateCnn } from './cnn';
+import { cnnHeaders, cnnRequestStart, cnnUrls, normalizeCnnHistory, parseCnn, validateCnn } from './cnn';
 
 export interface FgCollection {
   /** 병합된 전체 히스토리(계산 입력) */
@@ -27,7 +27,9 @@ export async function collectFg(ctx: Ctx, store: FileStore, expected: IsoDate): 
   const flags: MarketFlag[] = [];
 
   try {
-    const res = await fetchText(ctx, cnnUrl(cnnRequestStart(previous, expected)), cnnHeaders(ctx.env));
+    const got = await fetchFirst(ctx, cnnUrls(cnnRequestStart(previous, expected), ctx.env), cnnHeaders(ctx.env), 'cnn');
+    const res = got.res;
+    if (got.fallbacks.length > 0) base.fallbacks = got.fallbacks;
     const parsed = parseCnn(res.text);
     const rangeError = validateCnn(parsed, ctx.nowUtcMs);
     if (rangeError) throw new Error(rangeError);

@@ -1,0 +1,15 @@
+# RFG 감시 워커. 계정 ID 는 넣지 않는다(proxy/.env 의 CLOUDFLARE_ACCOUNT_ID·CLOUDFLARE_API_TOKEN 을 쓴다).
+# 공개 주소 없이 cron 으로만 돈다(workers.dev 계정 하위 도메인에 실명이 있어서도).
+name = "rfg-watchdog"
+main = "worker.ts"
+compatibility_date = "2026-09-01"
+workers_dev = false
+
+[triggers]
+crons = ["17 * * * *"]
+
+[vars]
+GH_REPO = "won-topiaa/Real-Fear-Greed-Index"
+GH_WORKFLOW = "collect.yml"
+GH_REF = "claude/loving-ptolemy-7sbr3j"
+PAGES_BASE = "https://won-topiaa.github.io/Real-Fear-Greed-Index"
