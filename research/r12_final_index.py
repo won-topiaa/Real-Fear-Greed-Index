@@ -13,6 +13,7 @@ from r10_index_quality import quality, truth_labels
 from r11_index_blend import ema, price_index
 
 FINAL_P = (252, 200, 20, 1260, 0.5, 0.3, 0.2, "avg")
+FINAL_SPAN = 1  # 2026-10-15 채택 때는 3, 2026-10-20 다듬기 없음으로 변경(r13_smoothing.py)
 V1_P = (60, 50, 20, 252, 0.5, 0.3, 0.2)
 WINDOWS = [
     ("S&P500 2022.11– (CNN)", "SP500", "CNN", "2022-11-01"),
@@ -40,7 +41,7 @@ if __name__ == "__main__":
         rng = px.index >= start
         idx = {
             "v1": blend(S[sk], price_p(c, V1_P), "linear", 0.4),
-            "채택안": ema(blend(S[sk], price_index(c, FINAL_P), "linear", 0.6), 3),
+            "채택안": ema(blend(S[sk], price_index(c, FINAL_P), "linear", 0.6), FINAL_SPAN),
         }
         if sk == "CNN":
             idx = {"CNN": S["CNN"], **idx}
@@ -64,7 +65,7 @@ if __name__ == "__main__":
         for sid in ("SP500", "NASDAQ100"):
             px, c, S, _ = cache[sid]
             v1 = blend(S["CNN"], price_p(c, V1_P), "linear", 0.4)
-            fin = ema(blend(S["CNN"], price_index(c, FINAL_P), "linear", 0.6), 3)
+            fin = ema(blend(S["CNN"], price_index(c, FINAL_P), "linear", 0.6), FINAL_SPAN)
             hi = pd.Series(c).rolling(252, min_periods=1).max().to_numpy()
             i = px.index.get_indexer([pd.Timestamp(d)], method="nearest")[0]
             f = lambda x: f"{x:.0f}" if np.isfinite(x) else "—"

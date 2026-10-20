@@ -47,7 +47,7 @@
     "W1_SENTIMENT": 0.6,
     "W2_PRICE": 0.4,
     "EPSILON": 0.00001,
-    "RFG_EMA_SPAN": 3
+    "RFG_EMA_SPAN": 1
   },
   "disclaimerVersion": 2,
   "fgSource": "own-history",

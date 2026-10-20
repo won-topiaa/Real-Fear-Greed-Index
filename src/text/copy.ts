@@ -113,7 +113,9 @@ export const WEB_COPY = {
   dispName: '이격도',
   rvName: '변동성',
   method: (): string =>
-    `지수 = ${P.W1_SENTIMENT} × 심리 + ${P.W2_PRICE} × 실질 가격을 ${P.RFG_EMA_SPAN}일 지수이동평균으로 다듬은 값이에요. ` +
+    (P.RFG_EMA_SPAN > 1
+      ? `지수 = ${P.W1_SENTIMENT} × 심리 + ${P.W2_PRICE} × 실질 가격을 ${P.RFG_EMA_SPAN}일 지수이동평균으로 다듬은 값이에요. `
+      : `지수 = ${P.W1_SENTIMENT} × 심리 + ${P.W2_PRICE} × 실질 가격이에요. `) +
     `실질 가격은 낙폭·이격도·변동성을 각각 최근 ${P.PERCENTILE_WINDOW_W}거래일 안의 백분위로 바꿔 ${P.ALPHA_DD}/${P.BETA_DISP}/${P.GAMMA_RV}로 섞어요. ` +
     `구간은 ${LABEL_RANGES()}.`,
   tableTitle: '최근 값 표로 보기',
@@ -189,7 +191,7 @@ export const COPY = {
     { key: LABELS.frmZone.HIDDEN_CRASH, rule: `전이 배수 ${T.FRM_HIDDEN_CRASH_MIN} 초과` },
   ],
   paramsSummary: (): string =>
-    `가중치 ${P.W1_SENTIMENT}(심리) / ${P.W2_PRICE}(실질 가격) · 훼손도 ${P.ALPHA_DD}/${P.BETA_DISP}/${P.GAMMA_RV}(낙폭/이격도/변동성 백분위) · 기준 ${P.PERCENTILE_WINDOW_W}거래일 · ${P.RFG_EMA_SPAN}일 평활`,
+    `가중치 ${P.W1_SENTIMENT}(심리) / ${P.W2_PRICE}(실질 가격) · 훼손도 ${P.ALPHA_DD}/${P.BETA_DISP}/${P.GAMMA_RV}(낙폭/이격도/변동성 백분위) · 기준 ${P.PERCENTILE_WINDOW_W}거래일 · ${P.RFG_EMA_SPAN > 1 ? `${P.RFG_EMA_SPAN}일 평활` : '평활 없음'}`,
   mockBadge: '샘플 데이터',
   mockHint: '프록시 주소가 비어 있어 예시 값을 보여줘요.',
   sourcesNotice: '심리 지표: CNN Business Fear & Greed Index(비공식 경로로 수집). 지수: FRED, Stooq. 참고용이며 실시간이 아니에요.',

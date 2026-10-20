@@ -8,7 +8,7 @@ export function fearFromFg(fg: number): number {
   return 100 - fg;
 }
 
-/** RFG_t = w1·FG_t + w2·(100 − P_t). 평활 전 값(표시값은 computeRfgSeries 가 EMA 로 다듬는다) */
+/** RFG_t = w1·FG_t + w2·(100 − P_t). 평활 전 값(RFG_EMA_SPAN > 1 이면 computeRfgSeries 가 EMA 로 다듬는다) */
 export function rfgOf(fg: number, p: number, params: RfgParams = RFG_PARAMS): number {
   return params.W1_SENTIMENT * fg + params.W2_PRICE * (100 - p);
 }
@@ -57,7 +57,8 @@ export function computeRfgSeries(
     const frm = fear != null && row.p != null ? frmOf(row.p, fear, params) : null;
     return { ...row, fg: a.fg, fgDate: a.fgDate, fgStaleDays: a.fgStaleDays, fear, rfg, frm };
   });
-  // 표시용 RFG 는 하루하루의 출렁임을 줄이려고 EMA 로 다듬는다(DESIGN §4.6). 구간 판정도 이 값으로 한다.
+  // RFG_EMA_SPAN > 1 이면 표시용 RFG 를 EMA 로 다듬는다. 구간 판정도 이 값으로 한다. 지금은 1(다듬지 않음) —
+  // 다듬으면 심리·가격이 둘 다 오른 날에도 점수가 내리는 날이 생겼다(DESIGN §4.6).
   const smoothed = emaSkipNull(rows.map((r) => r.rfg), params.RFG_EMA_SPAN);
   return rows.map((r, i) => ({ ...r, rfg: smoothed[i] ?? null }));
 }

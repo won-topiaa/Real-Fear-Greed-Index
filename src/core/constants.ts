@@ -29,8 +29,8 @@ export const RFG_PARAMS = {
   W2_PRICE: 0.4,
   /** ε — FRM 분모 */
   EPSILON: 1e-5,
-  /** RFG 표시값의 지수이동평균 기간(거래일). 1 이면 평활하지 않는다. α = 2 / (span + 1) */
-  RFG_EMA_SPAN: 3,
+  /** RFG 표시값의 지수이동평균 기간(거래일). 1 이면 평활하지 않는다. α = 2 / (span + 1). v2 처음 3 → 2026-10-20 1(DESIGN §4.6) */
+  RFG_EMA_SPAN: 1,
 } as const;
 
 export type RfgParams = { -readonly [K in keyof typeof RFG_PARAMS]: number };

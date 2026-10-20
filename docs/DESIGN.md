@@ -22,7 +22,7 @@
 | 신선도 | 벽시계가 아니라 **미국 거래일 차이**로 판정. 0일 fresh, 1~3일 delayed(배지만), 3일 초과 stale(RFG·사분면·FRM 표시 차단). |
 | 상수 | `src/core/constants.ts` 한 파일. `RFG_PARAMS`(계산), `THRESHOLDS`(보고서 문턱 그대로), `DATA_GATES`(보고서에 없는 운영 결정, 각 항목에 "보고서 외" 표시). 점수(순서)와 문턱(차단)을 섞지 않는다. |
 | 화면 | `/`(홈), `/about`(정보·면책), `/_404`(필수). **지수를 보여주는 화면**이다 — 시그널·매매 행동 문구는 화면에 내지 않는다(저장소 소유자 결정 2026-10-15: 앱인토스에는 올리지 않지만 신호가 아니라 지수를 원함). |
-| 엔진 v2 | 2026-10-15 지수 품질 백테스트(`research/README.md`)로 변경: P = 0.5·pct(1년 고점 대비 낙폭) + 0.3·pct(200일선 이격도) + 0.2·pct(20일 변동성), 각 5년 백분위. RFG = 0.6·FG + 0.4·(100 − P) 를 3일 EMA 로 다듬는다. 근거는 §4.6. |
+| 엔진 v2 | 2026-10-15 지수 품질 백테스트(`research/README.md`)로 변경: P = 0.5·pct(1년 고점 대비 낙폭) + 0.3·pct(200일선 이격도) + 0.2·pct(20일 변동성), 각 5년 백분위. RFG = 0.6·FG + 0.4·(100 − P). 처음엔 3일 EMA 로 다듬었으나 2026-10-20 뺐다(다듬으면 심리·가격이 둘 다 오른 날에도 점수가 내리는 날이 생겼다). 근거는 §4.6. |
 | 비밀값 | `proxy/.env`, `src/config.local.ts`, Actions Secrets 에만. `predeploy` 훅이 목 모드·원격 세션 배포를 차단한다. |
 
 ---
@@ -210,7 +210,7 @@ CNN은 장중에도 값을 갱신하므로 "거래일 t의 FG_t"를 정의해야
 | $SMA_{M,t} = \frac{1}{M}\sum_{k=0}^{M-1}Close_{t-k}$, $DISP_t = \dfrac{Close_t - SMA_{M,t}}{SMA_{M,t}}$ | `rollingSma(closes, M)`, `rollingDisparity(closes, M)` | |
 | $r_t = \ln(Close_t/Close_{t-1})$, $RV_t = \sqrt{252}\sqrt{\frac{1}{K-1}\sum_{j=0}^{K-1}(r_{t-j}-\bar r)^2}$ | `computeLogReturns(closes)`, `rollingRealizedVol(closes, K, ANNUALIZATION_DAYS)` | **표본표준편차(K−1), 평균 차감.** 수익률 K개 → 종가 K+1개 필요. `t < K`이면 null. 252는 `ANNUALIZATION_DAYS`로 창 W와 **다른 상수** |
 | $P_t = Composite\_Damage_t = \dfrac{\alpha\,\mathrm{pct}_W(-DD)_t+\beta\,\mathrm{pct}_W(-DISP)_t+\gamma\,\mathrm{pct}_W(RV)_t}{\alpha+\beta+\gamma}$ (v2. v1 은 $\mathrm{pct}_W(\alpha(-DD)+\beta(-DISP)+\gamma RV)$) | `rollingPercentileRank(values, W)` ×3, `compositeDamage(pdd, pdisp, prv, params)` | 성분별 백분위(§4.1) 중 하나라도 null이면 null. 단위가 다른 원시값을 섞지 않는다 |
-| $RFG^{raw}_t = w_1 FG_t + w_2(100-P_t)$, $RFG_t = \mathrm{EMA}_{span}(RFG^{raw})_t$ | `rfgOf(fg, p, params)`, `emaSkipNull(values, RFG_EMA_SPAN)` | `assertParams`: $w_1+w_2=1$, 창 ≥ 2, span ≥ 1. EMA 는 α = 2/(span+1), 첫 유효값에서 시작, 결측일은 null·상태 유지. 구간 판정·화면은 평활값 |
+| $RFG^{raw}_t = w_1 FG_t + w_2(100-P_t)$, $RFG_t = \mathrm{EMA}_{span}(RFG^{raw})_t$ | `rfgOf(fg, p, params)`, `emaSkipNull(values, RFG_EMA_SPAN)` | `assertParams`: $w_1+w_2=1$, 창 ≥ 2, span ≥ 1. EMA 는 α = 2/(span+1), 첫 유효값에서 시작, 결측일은 null·상태 유지. 구간 판정·화면은 이 값(span 1 이면 $RFG^{raw}$ 그대로) |
 | $FRM_t = \dfrac{P_t}{Fear_t+\epsilon}$ | `frmOf(p, fear, params)` | 값은 캡하지 않는다. 표시 게이트는 §4.4 |
 
 ### 4.1 롤링 백분위 — 확정 정의
@@ -259,7 +259,7 @@ export const RFG_PARAMS = {
   ALPHA_DD: 0.5, BETA_DISP: 0.3, GAMMA_RV: 0.2,              // 같음(v2 는 성분별 백분위에 건다)
   W1_SENTIMENT: 0.6, W2_PRICE: 0.4,                          // v1 0.4, 0.6
   EPSILON: 1e-5,
-  RFG_EMA_SPAN: 3,                                           // v2 신규(1 이면 평활 없음)
+  RFG_EMA_SPAN: 1,                                           // v2 처음 3 → 2026-10-20 1(평활 없음, §4.6)
 } as const;
 
 /** 문턱 — 보고서 §3·§4·§5.1 값 그대로. 점수가 아니라 이름을 붙이거나 막는 경계. 부등호는 주석의 방향이 유일한 진실. */
@@ -337,9 +337,10 @@ export const DISPLAY_DIGITS = { score: 0, ratioPercent: 1, frm: 2 } as const;
 | 백분위 창 W | 252 | 1260 (약 5년) | 1년 창은 긴 약세장에서 기준이 같이 내려가 공포를 덜 보였다 |
 | P 합성 | 원시값 합성 후 백분위 | 성분별 백분위의 가중 평균 | 단위가 다른 값(연율 변동성 등)이 합성을 지배하지 않는다 |
 | 가중치 w1/w2 | 0.4/0.6 | 0.6/0.4 | 0.3–0.6 이 모두 정확도 0.99 근처(평탄). CNN 상관 ≥ 0.8 을 지키는 값 |
-| 평활 | 없음 | 3일 EMA | 하루 변동 5.9 → 2.9, 정확도 손실 거의 없음 |
+| 평활 | 없음 | 3일 EMA → 없음(2026-10-20) | 처음엔 하루 변동 5.9 → 2.9 를 보고 넣었다. 아래 '평활 제거' 참고 |
 
 결과(대표): 정확도 v1 0.911–0.963 → v2 0.988–0.994, VIX 일치 0.34–0.52 → 0.48–0.69, 하루 변동 4.4–5.9 → 2.0–2.9. 바꾸지 않은 것: 백분위 정의(§4.1), α/β/γ, 구간 문턱 20/80, 사분면·FRM 문턱, 반올림 규칙.
+**평활 제거 (2026-10-20, `research/r13_smoothing.py`)**: 3일 EMA 는 점수를 하루 늦게 따라가서, 심리·실질 가격이 둘 다 오른 날에도 점수가 내리는 날이 S&P 4.6%·나스닥100 3.9%(한 달에 한 번꼴) 생겼다(2026-10-19: CNN 22 → 23, 실질 가격 53 → 58 인데 점수 40 → 39). 화면의 구성 요소 막대로 계산한 값과 점수도 맞지 않았다. 빼도 정확도는 그대로(0.994 → 0.992, 0.988 → 0.989)였고 CNN 상관(0.88 → 0.90)·VIX 일치(0.69 → 0.71)는 조금 올랐다. 대가는 출렁임: 하루 변동 2.0 → 3.5(CNN 3.2), 하루 5점 이상 움직인 날 9% → 29%(CNN 22%), 10점 이상 급변 연 1–2번 → 12–13번(CNN 14–15번). 'CNN 수준의 출렁임'을 받아들이고 '점수가 항상 두 구성 요소로 설명되는 것'을 골랐다(저장소 소유자 결정). 그래서 §4.6 의 '하루 변동 ≤ CNN' 기준은 이제 지키지 않는다.
 처음에는 "지수가 낮으면 이후 수익률이 높은가"(예측력)로 골랐으나, 그렇게 고른 엔진은 반등 뒤에도 공포에 머물고(2025-05-30 CNN 62 / 그 엔진 33) 10% 조정을 놓쳐 지수로서 부적합해 기각했다(`research/README.md` §8).
 
 ---

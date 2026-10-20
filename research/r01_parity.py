@@ -19,7 +19,7 @@ for sym, sid in [("SPX", "SP500"), ("NDX", "NASDAQ100")]:
     comp = 0.5 * L.rolling_pct(-dd, 1260) + 0.3 * L.rolling_pct(-disp, 1260) + 0.2 * L.rolling_pct(rv, 1260)
     p = comp
     f = L.asof_join(s.index, fg).to_numpy()
-    rfg = pd.Series(0.6 * f + 0.4 * (100 - p)).ewm(span=3, adjust=False, ignore_na=True).mean().to_numpy()
+    rfg = 0.6 * f + 0.4 * (100 - p)  # RFG_EMA_SPAN = 1(다듬지 않음, 2026-10-20)
     i = s.index.get_loc(pd.Timestamp(snap["markets"][sym]["closeDate"]))
     got = dict(dd=dd[i], disp=disp[i], rv=rv[i], composite=comp[i], p=p[i], fg=f[i], rfg=rfg[i])
     want = snap["markets"][sym]["latest"]

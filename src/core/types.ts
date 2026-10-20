@@ -44,7 +44,7 @@ export interface RfgRow extends DamageRow {
   fgStaleDays: number | null;
   /** Fear_t = 100 − FG_t */
   fear: number | null;
-  /** RFG_t — 표시값(RFG_EMA_SPAN 지수이동평균) */
+  /** RFG_t — 표시값(RFG_EMA_SPAN 지수이동평균. 1 이면 rfgOf 그대로) */
   rfg: number | null;
   /** FRM_t (캡하지 않은 원시값) */
   frm: number | null;
