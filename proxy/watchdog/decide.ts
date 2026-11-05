@@ -8,9 +8,13 @@ import { NYSE_HOLIDAYS, closeAtUtcOf, expectedLatestTradingDate, tradingDaysBetw
 import type { IndexSymbol, IsoDate } from '../../src/core/types';
 
 export const WATCHDOG = {
-  /** 종가 뒤 이만큼은 기다린다 — 나스닥 100 공식 종가(17:15 ET) 뒤 야후 반영 여유. EDT 22:30Z · EST 23:30Z */
-  AFTER_CLOSE_MS: 2.5 * 3_600_000,
-  /** 최근 이 안에 만들어진 실행이 있으면 돌리지 않는다(그 실행과 wait-for-fred 에 맡긴다) */
+  /**
+   * 기대 거래일의 이 시각(UTC)부터 돌린다. 매시 20분 cron(wrangler.toml)과 맞물려 첫 수집이 1년 내내 22:20Z = 07:20 KST 에 돈다.
+   * 야후 최종값이 ^GSPC 16:34 ET · ^NDX 17:15 ET 쯤 굳어서(2026-11-05 실측) EST(22:15Z)에도 첫 게시값이 확정값이다.
+   * 틱이 조금 앞서 와도 한 시간을 놓치지 않게 20분이 아니라 15분으로 둔다.
+   */
+  FIRST_RUN_UTC: '22:15',
+  /** 종가 뒤 이 안에 만들어진 실행이 있으면 돌리지 않는다(그 실행과 wait-for-fred 에 맡긴다). 종가 전 실행은 그날 값을 못 받았으니 세지 않는다 */
   QUIET_MS: 110 * 60_000,
   /** 한 거래일(종가 뒤)에 workflow_dispatch 실행이 이만큼 쌓이면 더 돌리지 않는다 — 소스가 죽은 날 실패 메일이 쏟아지지 않게 */
   MAX_DISPATCHES_PER_DAY: 4,
@@ -46,7 +50,7 @@ export function decide(input: WatchdogInput): Decision {
   const closeMs = Date.parse(closeAtUtcOf(expected));
   const no = (reason: string): Decision => ({ dispatch: false, reason, expected });
 
-  if (input.nowUtcMs < closeMs + WATCHDOG.AFTER_CLOSE_MS) return no(`${expected} 종가 뒤 대기 중`);
+  if (input.nowUtcMs < Date.parse(`${expected}T${WATCHDOG.FIRST_RUN_UTC}:00Z`)) return no(`${expected} 07:20 KST 대기 중`);
 
   let behind = 0;
   for (const sym of SYMBOLS) {
@@ -56,7 +60,8 @@ export function decide(input: WatchdogInput): Decision {
   if (behind <= 0) return no(`${expected} 까지 게시됨`);
 
   if (input.runs.some((r) => r.status !== 'completed')) return no('도는 실행이 있다');
-  if (input.runs.some((r) => input.nowUtcMs - Date.parse(r.createdAt) < WATCHDOG.QUIET_MS)) return no('최근 실행이 있다');
+  const quietFrom = Math.max(closeMs, input.nowUtcMs - WATCHDOG.QUIET_MS);
+  if (input.runs.some((r) => Date.parse(r.createdAt) > quietFrom)) return no('최근 실행이 있다');
   const dispatched = input.runs.filter((r) => r.event === 'workflow_dispatch' && Date.parse(r.createdAt) >= closeMs).length;
   if (dispatched >= WATCHDOG.MAX_DISPATCHES_PER_DAY) return no(`${expected} 에 이미 ${dispatched}번 돌렸다`);
 

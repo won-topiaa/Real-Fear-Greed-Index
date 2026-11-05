@@ -2,19 +2,28 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { WATCHDOG, decide, type RunInfo } from '../watchdog/decide';
 
-// 2026-10-19(월) EDT 종가 = 20:00Z. 감시는 종가 2.5시간 뒤(22:30Z)부터 본다.
+// 2026-10-19(월) EDT 종가 = 20:00Z. 감시는 EDT·EST 모두 22:20Z(07:20 KST) 틱부터 본다.
 const MON_2317 = Date.parse('2026-10-19T23:17:00Z');
 const done = (createdAt: string, event = 'schedule'): RunInfo => ({ status: 'completed', event, createdAt });
 const OLD_RUNS = [done('2026-10-19T14:45:00Z'), done('2026-10-19T09:20:00Z')];
 
-test('감시: 종가 뒤 대기 시간 전에는 돌리지 않는다(EDT 22:30Z, EST 23:30Z)', () => {
+test('감시: 서머타임과 상관없이 07:20 KST(22:20Z) 틱부터 돌린다', () => {
   const stale = { SPX: '2026-10-16', NDX: '2026-10-16' };
-  assert.equal(decide({ nowUtcMs: Date.parse('2026-10-19T22:17:00Z'), closeDates: stale, runs: OLD_RUNS }).dispatch, false);
-  assert.equal(decide({ nowUtcMs: Date.parse('2026-10-19T22:31:00Z'), closeDates: stale, runs: OLD_RUNS }).dispatch, true);
-  // 11-02(월)은 EST — 종가 21:00Z, 23:17Z 는 아직 대기
+  assert.equal(decide({ nowUtcMs: Date.parse('2026-10-19T21:20:00Z'), closeDates: stale, runs: OLD_RUNS }).dispatch, false);
+  assert.equal(decide({ nowUtcMs: Date.parse('2026-10-19T22:20:00Z'), closeDates: stale, runs: OLD_RUNS }).dispatch, true);
+  // 11-02(월)은 EST — 종가 21:00Z 뒤에도 22:20Z 전에는 기다린다
   const est = { SPX: '2026-10-30', NDX: '2026-10-30' };
-  assert.equal(decide({ nowUtcMs: Date.parse('2026-11-02T23:17:00Z'), closeDates: est, runs: [] }).dispatch, false);
-  assert.equal(decide({ nowUtcMs: Date.parse('2026-11-03T00:17:00Z'), closeDates: est, runs: [] }).dispatch, true);
+  assert.equal(decide({ nowUtcMs: Date.parse('2026-11-02T21:20:00Z'), closeDates: est, runs: [] }).dispatch, false);
+  assert.equal(decide({ nowUtcMs: Date.parse('2026-11-02T22:20:00Z'), closeDates: est, runs: [] }).dispatch, true);
+  // 틱이 몇 초 앞서 와도 놓치지 않는다
+  assert.equal(decide({ nowUtcMs: Date.parse('2026-11-02T22:19:58Z'), closeDates: est, runs: [] }).dispatch, true);
+});
+
+test('감시: 종가 전에 만들어진 실행은 최근 실행으로 치지 않는다(밀린 예약이 마감 직전에 도는 날)', () => {
+  const now = Date.parse('2026-11-02T22:20:00Z');
+  const est = { SPX: '2026-10-30', NDX: '2026-10-30' };
+  assert.equal(decide({ nowUtcMs: now, closeDates: est, runs: [done('2026-11-02T20:13:00Z')] }).dispatch, true);
+  assert.equal(decide({ nowUtcMs: now, closeDates: est, runs: [done('2026-11-02T21:05:00Z')] }).reason, '최근 실행이 있다');
 });
 
 test('감시: 게시본이 늦으면 돌리고, 한 지수만 늦어도 돌린다', () => {
